@@ -1,4 +1,5 @@
 public enum ToolType {
+    SELECT("Select"),
     RECTANGLE("Rectangle"),
     CIRCLE("Circle"),
     TRIANGLE("Triangle"),

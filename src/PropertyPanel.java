@@ -94,13 +94,13 @@ public class PropertyPanel extends JPanel {
     private void setupListeners() {
         ChangeListener listener = e -> {
             if (currentShape == null || isUpdating) return;
-            currentShape.setX((Integer) xSpinner.getValue());
-            currentShape.setY((Integer) ySpinner.getValue());
-            currentShape.setRotation((Double) rotationSpinner.getValue());
-            currentShape.setScaleX((Double) scaleXSpinner.getValue());
-            currentShape.setScaleY((Double) scaleYSpinner.getValue());
-            currentShape.setSkewX((Double) skewXSpinner.getValue());
-            currentShape.setSkewY((Double) skewYSpinner.getValue());
+            currentShape.setX(((Number) xSpinner.getValue()).intValue());
+            currentShape.setY(((Number) ySpinner.getValue()).intValue());
+            currentShape.setRotation(((Number) rotationSpinner.getValue()).doubleValue());
+            currentShape.setScaleX(((Number) scaleXSpinner.getValue()).doubleValue());
+            currentShape.setScaleY(((Number) scaleYSpinner.getValue()).doubleValue());
+            currentShape.setSkewX(((Number) skewXSpinner.getValue()).doubleValue());
+            currentShape.setSkewY(((Number) skewYSpinner.getValue()).doubleValue());
             onChangeCallback.run();
          };
 

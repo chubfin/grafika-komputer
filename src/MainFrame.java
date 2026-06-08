@@ -68,12 +68,13 @@ public class MainFrame extends JFrame {
     }
 
     private JPanel createToolBar() {
-        JPanel toolBar = new JPanel(new GridLayout(6, 1, 6, 6));
+        JPanel toolBar = new JPanel(new GridLayout(7, 1, 6, 6));
         toolBar.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         toolBar.setPreferredSize(new Dimension(130, 0));
 
         ButtonGroup toolGroup = new ButtonGroup();
-        addToolButton(toolBar, toolGroup, ToolType.RECTANGLE, true);
+        addToolButton(toolBar, toolGroup, ToolType.SELECT, true);
+        addToolButton(toolBar, toolGroup, ToolType.RECTANGLE, false);
         addToolButton(toolBar, toolGroup, ToolType.CIRCLE, false);
         addToolButton(toolBar, toolGroup, ToolType.TRIANGLE, false);
         addToolButton(toolBar, toolGroup, ToolType.LINE, false);
@@ -110,42 +111,39 @@ public class MainFrame extends JFrame {
     }
 
     private void chooseFillColor() {
-        Color selectedColor = JColorChooser.showDialog(this, "Choose Fill Color", drawingPanel.getCurrentFillColor());
+        ShapeObject selectedShape = shapeManager.getSelectedShape();
+        Color initialColor = (selectedShape != null) ? selectedShape.getFillColor() : drawingPanel.getCurrentFillColor();
+        Color selectedColor = JColorChooser.showDialog(this, "Choose Fill Color", initialColor);
         if (selectedColor == null) {
             return;
         }
 
-        drawingPanel.setCurrentFillColor(selectedColor);
+        if (selectedShape != null) {
+            selectedShape.setFillColor(selectedColor);
+            drawingPanel.repaint();
+        } else {
+            drawingPanel.setCurrentFillColor(selectedColor);
+        }
         fillColorButton.setBackground(selectedColor);
-        applyColorToSelectedShape(true, selectedColor);
         statusLabel.setText("Fill color updated");
     }
 
     private void chooseStrokeColor() {
-        Color selectedColor = JColorChooser.showDialog(this, "Choose Stroke Color", drawingPanel.getCurrentStrokeColor());
+        ShapeObject selectedShape = shapeManager.getSelectedShape();
+        Color initialColor = (selectedShape != null) ? selectedShape.getStrokeColor() : drawingPanel.getCurrentStrokeColor();
+        Color selectedColor = JColorChooser.showDialog(this, "Choose Stroke Color", initialColor);
         if (selectedColor == null) {
             return;
         }
 
-        drawingPanel.setCurrentStrokeColor(selectedColor);
-        strokeColorButton.setBackground(selectedColor);
-        applyColorToSelectedShape(false, selectedColor);
-        statusLabel.setText("Stroke color updated");
-    }
-
-    private void applyColorToSelectedShape(boolean fillColor, Color selectedColor) {
-        ShapeObject selectedShape = shapeManager.getSelectedShape();
-        if (selectedShape == null) {
-            return;
-        }
-
-        if (fillColor) {
-            selectedShape.setFillColor(selectedColor);
-        } else {
+        if (selectedShape != null) {
             selectedShape.setStrokeColor(selectedColor);
+            drawingPanel.repaint();
+        } else {
+            drawingPanel.setCurrentStrokeColor(selectedColor);
         }
-
-        drawingPanel.repaint();
+        strokeColorButton.setBackground(selectedColor);
+        statusLabel.setText("Stroke color updated");
     }
 
     private JPanel createStatusBar() {
@@ -160,9 +158,13 @@ public class MainFrame extends JFrame {
 
         if (selectedShape == null) {
             statusLabel.setText("No object selected");
+            fillColorButton.setBackground(drawingPanel.getCurrentFillColor());
+            strokeColorButton.setBackground(drawingPanel.getCurrentStrokeColor());
             return;
         }
 
         statusLabel.setText("Selected: " + selectedShape.getType().getDisplayName() + " #" + selectedShape.getId());
+        fillColorButton.setBackground(selectedShape.getFillColor());
+        strokeColorButton.setBackground(selectedShape.getStrokeColor());
     }
 }
