@@ -14,6 +14,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
+import java.awt.geom.AffineTransform;
 import java.util.function.Consumer;
 
 public class DrawingPanel extends JPanel {
@@ -79,10 +80,32 @@ public class DrawingPanel extends JPanel {
     private void drawShape(Graphics2D g2d, ShapeObject shapeObject) {
         Shape shape = createDrawableShape(shapeObject);
 
+        double centerX = shapeObject.getX() + shapeObject.getWidth() / 2.0;
+        double centerY = shapeObject.getY() + shapeObject.getHeight() / 2.0;
+
+        AffineTransform originalTransform = g2d.getTransform();
+
+        AffineTransform transform = new AffineTransform();
+
+        //rotasi
+        transform.rotate(Math.toRadians(shapeObject.getRotation()), centerX, centerY);
+
+        //skala
+        transform.translate(centerX, centerY);
+        transform.scale(shapeObject.getScaleX(), shapeObject.getScaleY());
+        transform.translate(-centerX, -centerY);
+
+        transform.translate(centerX, centerY);
+        transform.shear(shapeObject.getSkewX(), shapeObject.getSkewY());
+        transform.translate(-centerX, -centerY);
+
+        g2d.setTransform(transform);
+
         if (shapeObject.getType() != ToolType.LINE) {
             g2d.setColor(shapeObject.getFillColor());
             g2d.fill(shape);
         }
+
 
         g2d.setStroke(new BasicStroke(2));
         g2d.setColor(shapeObject.getStrokeColor());
@@ -93,6 +116,31 @@ public class DrawingPanel extends JPanel {
             g2d.setColor(Color.RED);
             g2d.draw(shape.getBounds2D());
         }
+
+        // refleksi horizontal
+        if (shapeObject.isReflected()) {
+            g2d.setTransform(originalTransform);
+
+            AffineTransform reflectTransform = new AffineTransform();
+
+            reflectTransform.concatenate(transform);
+
+            reflectTransform.translate(centerX, centerY);
+            reflectTransform.scale(-1, 1);
+            reflectTransform.translate(-centerX, -centerY);
+
+            g2d.setTransform(reflectTransform);
+
+            if (shapeObject.getType() != ToolType.LINE) {
+                Color fillColor = shapeObject.getFillColor();
+                g2d.setColor(new Color(fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue(), 120));
+                g2d.fill(shape);
+            }
+            g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10, new float[]{6, 4}, 0));
+            g2d.setColor(shapeObject.getStrokeColor());
+            g2d.draw(shape);
+        }
+        g2d.setTransform(originalTransform);
     }
 
     private Shape createDrawableShape(ShapeObject shapeObject) {

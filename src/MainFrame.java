@@ -25,9 +25,9 @@ public class MainFrame extends JFrame {
 
     public MainFrame() {
         shapeManager = new ShapeManager();
-        propertyPanel = new PropertyPanel();
-        statusLabel = new JLabel("Ready");
         drawingPanel = new DrawingPanel(shapeManager, this::onSelectionChanged);
+        propertyPanel = new PropertyPanel(() -> drawingPanel.repaint());
+        statusLabel = new JLabel("Ready");
 
         setTitle("Simple Paint - Grafika Komputer");
         setSize(1200, 700);
