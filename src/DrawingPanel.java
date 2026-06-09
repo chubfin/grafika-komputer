@@ -27,12 +27,13 @@ public class DrawingPanel extends JPanel {
     private Color currentStrokeColor;
     private Point dragStartPoint;
     private Point lastDragPoint;
+    private Point currentDragPoint;
     private boolean draggingSelectedShape;
 
     public DrawingPanel(ShapeManager shapeManager, Consumer<ShapeObject> selectionListener) {
         this.shapeManager = shapeManager;
         this.selectionListener = selectionListener;
-        this.currentTool = ToolType.RECTANGLE;
+        this.currentTool = ToolType.SELECT;
         this.currentFillColor = new Color(115, 166, 255);
         this.currentStrokeColor = Color.BLACK;
         this.draggingSelectedShape = false;
@@ -74,30 +75,21 @@ public class DrawingPanel extends JPanel {
             drawShape(g2d, shapeObject);
         }
 
+        if (dragStartPoint != null && currentDragPoint != null && !draggingSelectedShape) {
+            drawPreview(g2d);
+        }
+
         g2d.dispose();
     }
 
     private void drawShape(Graphics2D g2d, ShapeObject shapeObject) {
         Shape shape = createDrawableShape(shapeObject);
 
-        double centerX = shapeObject.getX() + shapeObject.getWidth() / 2.0;
-        double centerY = shapeObject.getY() + shapeObject.getHeight() / 2.0;
-
         AffineTransform originalTransform = g2d.getTransform();
 
-        AffineTransform transform = new AffineTransform();
-
-        //rotasi
-        transform.rotate(Math.toRadians(shapeObject.getRotation()), centerX, centerY);
-
-        //skala
-        transform.translate(centerX, centerY);
-        transform.scale(shapeObject.getScaleX(), shapeObject.getScaleY());
-        transform.translate(-centerX, -centerY);
-
-        transform.translate(centerX, centerY);
-        transform.shear(shapeObject.getSkewX(), shapeObject.getSkewY());
-        transform.translate(-centerX, -centerY);
+        // High-DPI Scaling Fix: Keep the original transform and concatenate
+        AffineTransform transform = new AffineTransform(originalTransform);
+        transform.concatenate(shapeObject.getTransform());
 
         g2d.setTransform(transform);
 
@@ -105,7 +97,6 @@ public class DrawingPanel extends JPanel {
             g2d.setColor(shapeObject.getFillColor());
             g2d.fill(shape);
         }
-
 
         g2d.setStroke(new BasicStroke(2));
         g2d.setColor(shapeObject.getStrokeColor());
@@ -119,15 +110,8 @@ public class DrawingPanel extends JPanel {
 
         // refleksi horizontal
         if (shapeObject.isReflected()) {
-            g2d.setTransform(originalTransform);
-
-            AffineTransform reflectTransform = new AffineTransform();
-
-            reflectTransform.concatenate(transform);
-
-            reflectTransform.translate(centerX, centerY);
-            reflectTransform.scale(-1, 1);
-            reflectTransform.translate(-centerX, -centerY);
+            AffineTransform reflectTransform = new AffineTransform(originalTransform);
+            reflectTransform.concatenate(shapeObject.getReflectionTransform());
 
             g2d.setTransform(reflectTransform);
 
@@ -139,31 +123,82 @@ public class DrawingPanel extends JPanel {
             g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10, new float[]{6, 4}, 0));
             g2d.setColor(shapeObject.getStrokeColor());
             g2d.draw(shape);
+
+            // Also draw selection border for reflected shape
+            if (shapeObject.isSelected()) {
+                g2d.setStroke(new BasicStroke(2));
+                g2d.setColor(Color.RED);
+                g2d.draw(shape.getBounds2D());
+            }
         }
         g2d.setTransform(originalTransform);
     }
 
+    private void drawPreview(Graphics2D g2d) {
+        if (dragStartPoint.distance(currentDragPoint) < 4) {
+            return;
+        }
+
+        int x = Math.min(dragStartPoint.x, currentDragPoint.x);
+        int y = Math.min(dragStartPoint.y, currentDragPoint.y);
+        int width = Math.abs(currentDragPoint.x - dragStartPoint.x);
+        int height = Math.abs(currentDragPoint.y - dragStartPoint.y);
+
+        if (currentTool == ToolType.LINE) {
+            x = dragStartPoint.x;
+            y = dragStartPoint.y;
+            width = currentDragPoint.x - dragStartPoint.x;
+            height = currentDragPoint.y - dragStartPoint.y;
+        }
+
+        ShapeObject tempShape = new ShapeObject(-1, currentTool, x, y, width, height);
+        tempShape.setFillColor(new Color(
+                currentFillColor.getRed(),
+                currentFillColor.getGreen(),
+                currentFillColor.getBlue(),
+                100
+        ));
+        tempShape.setStrokeColor(currentStrokeColor);
+
+        Shape shape = createDrawableShape(tempShape);
+
+        AffineTransform originalTransform = g2d.getTransform();
+        AffineTransform previewTx = new AffineTransform(originalTransform);
+        // Posisikan bentuk preview menggunakan translasi ke (x, y)
+        previewTx.translate(x, y);
+        g2d.setTransform(previewTx);
+
+        if (tempShape.getType() != ToolType.LINE) {
+            g2d.setColor(tempShape.getFillColor());
+            g2d.fill(shape);
+        }
+
+        g2d.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{5.0f, 5.0f}, 0.0f));
+        g2d.setColor(tempShape.getStrokeColor());
+        g2d.draw(shape);
+
+        g2d.setTransform(originalTransform);
+    }
+
     private Shape createDrawableShape(ShapeObject shapeObject) {
-        int x = shapeObject.getX();
-        int y = shapeObject.getY();
         int width = shapeObject.getWidth();
         int height = shapeObject.getHeight();
 
         switch (shapeObject.getType()) {
             case RECTANGLE:
-                return new Rectangle(x, y, width, height);
+                return new Rectangle(0, 0, width, height);
             case CIRCLE:
-                return new Ellipse2D.Double(x, y, width, height);
+                return new Ellipse2D.Double(0, 0, width, height);
             case TRIANGLE:
                 Polygon triangle = new Polygon();
-                triangle.addPoint(x + width / 2, y);
-                triangle.addPoint(x, y + height);
-                triangle.addPoint(x + width, y + height);
+                triangle.addPoint(width / 2, 0);
+                triangle.addPoint(0, height);
+                triangle.addPoint(width, height);
                 return triangle;
             case LINE:
-                return new Line2D.Double(x, y, x + width, y + height);
+                return new Line2D.Double(0, 0, width, height);
             default:
-                return new Rectangle(x, y, width, height);
+                return new Rectangle(0, 0, width, height);
         }
     }
 
@@ -174,51 +209,66 @@ public class DrawingPanel extends JPanel {
                 requestFocusInWindow();
                 dragStartPoint = e.getPoint();
                 lastDragPoint = e.getPoint();
+                currentDragPoint = e.getPoint();
 
-                ShapeObject clickedShape = shapeManager.findShapeAt(e.getX(), e.getY());
-                draggingSelectedShape = clickedShape != null;
+                if (currentTool == ToolType.SELECT) {
+                    ShapeObject clickedShape = shapeManager.findShapeAt(e.getX(), e.getY());
+                    draggingSelectedShape = clickedShape != null;
 
-                if (clickedShape != null) {
-                    shapeManager.selectShape(clickedShape);
-                    notifySelectionChanged();
-                    repaint();
-                    return;
+                    if (clickedShape != null) {
+                        shapeManager.selectShape(clickedShape);
+                        notifySelectionChanged();
+                        repaint();
+                    } else {
+                        shapeManager.clearSelection();
+                        notifySelectionChanged();
+                        repaint();
+                    }
+                } else {
+                    draggingSelectedShape = false;
                 }
-
-                shapeManager.clearSelection();
-                notifySelectionChanged();
-                repaint();
             }
 
             @Override
             public void mouseDragged(MouseEvent e) {
-                if (!draggingSelectedShape) {
-                    return;
-                }
+                currentDragPoint = e.getPoint();
+                if (currentTool == ToolType.SELECT) {
+                    if (!draggingSelectedShape) {
+                        return;
+                    }
 
-                ShapeObject selectedShape = shapeManager.getSelectedShape();
-                if (selectedShape == null) {
-                    return;
-                }
+                    ShapeObject selectedShape = shapeManager.getSelectedShape();
+                    if (selectedShape == null) {
+                        return;
+                    }
 
-                int deltaX = e.getX() - lastDragPoint.x;
-                int deltaY = e.getY() - lastDragPoint.y;
-                selectedShape.moveBy(deltaX, deltaY);
-                lastDragPoint = e.getPoint();
-                notifySelectionChanged();
-                repaint();
+                    int deltaX = e.getX() - lastDragPoint.x;
+                    int deltaY = e.getY() - lastDragPoint.y;
+                    selectedShape.moveBy(deltaX, deltaY);
+                    lastDragPoint = e.getPoint();
+                    notifySelectionChanged();
+                    repaint();
+                } else {
+                    // Update preview
+                    repaint();
+                }
             }
 
             @Override
             public void mouseReleased(MouseEvent e) {
-                if (draggingSelectedShape) {
+                if (currentTool == ToolType.SELECT) {
                     draggingSelectedShape = false;
+                    dragStartPoint = null;
+                    lastDragPoint = null;
+                    currentDragPoint = null;
                     return;
                 }
 
                 createShapeFromDrag(e.getPoint());
                 dragStartPoint = null;
                 lastDragPoint = null;
+                currentDragPoint = null;
+                repaint();
             }
         };
 
@@ -227,14 +277,14 @@ public class DrawingPanel extends JPanel {
     }
 
     private void setupKeyboardHandlers() {
-        addKeyListener(new KeyAdapter() {
+        // Use Key Bindings instead of KeyListener for VK_DELETE so it works window-wide
+        getInputMap(WHEN_IN_FOCUSED_WINDOW).put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deleteShape");
+        getActionMap().put("deleteShape", new javax.swing.AbstractAction() {
             @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_DELETE) {
-                    shapeManager.deleteSelectedShape();
-                    notifySelectionChanged();
-                    repaint();
-                }
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                shapeManager.deleteSelectedShape();
+                notifySelectionChanged();
+                repaint();
             }
         });
     }

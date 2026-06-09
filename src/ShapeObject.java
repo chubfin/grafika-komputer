@@ -1,4 +1,11 @@
 import java.awt.Color;
+import java.awt.Shape;
+import java.awt.Polygon;
+import java.awt.Rectangle;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.Line2D;
+import java.awt.geom.Point2D;
 
 public class ShapeObject {
 
@@ -52,17 +59,97 @@ public class ShapeObject {
         this.reflected = false;
     }
 
+    public Shape getTransformedShape() {
+        return getTransform().createTransformedShape(createBaseShape());
+    }
+
+    public AffineTransform getTransform() {
+        AffineTransform transform = new AffineTransform();
+
+        // 1. Translasi ke posisi absolut (x, y)
+        transform.translate(x, y);
+
+        double centerX = width / 2.0;
+        double centerY = height / 2.0;
+
+        // 2. Rotasi di titik pusat lokal
+        transform.rotate(Math.toRadians(rotation), centerX, centerY);
+
+        // 3. Skala di titik pusat lokal
+        transform.translate(centerX, centerY);
+        transform.scale(scaleX, scaleY);
+        transform.translate(-centerX, -centerY);
+
+        // 4. Skew/Shear di titik pusat lokal
+        transform.translate(centerX, centerY);
+        transform.shear(skewX, skewY);
+        transform.translate(-centerX, -centerY);
+
+        return transform;
+    }
+
+    public AffineTransform getReflectionTransform() {
+        double axisX = x + width;
+        double centerY = y + height / 2.0;
+
+        AffineTransform reflectTransform = new AffineTransform();
+        // Pencerminan horizontal terhadap sumbu axisX
+        reflectTransform.translate(axisX, centerY);
+        reflectTransform.scale(-1, 1);
+        reflectTransform.translate(-axisX, -centerY);
+
+        // Gabungkan dengan matriks transformasi utama shape
+        reflectTransform.concatenate(getTransform());
+
+        return reflectTransform;
+    }
+
+    private Shape createBaseShape() {
+        int width = this.width;
+        int height = this.height;
+
+        switch (this.type) {
+            case RECTANGLE:
+                return new Rectangle(0, 0, width, height);
+            case CIRCLE:
+                return new Ellipse2D.Double(0, 0, width, height);
+            case TRIANGLE:
+                Polygon triangle = new Polygon();
+                triangle.addPoint(width / 2, 0);
+                triangle.addPoint(0, height);
+                triangle.addPoint(width, height);
+                return triangle;
+            case LINE:
+                return new Line2D.Double(0, 0, width, height);
+            default:
+                return new Rectangle(0, 0, width, height);
+        }
+    }
+
     public boolean contains(int pointX, int pointY) {
+        if (containsInShape(pointX, pointY, false)) {
+            return true;
+        }
+        if (reflected && containsInShape(pointX, pointY, true)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean containsInShape(int pointX, int pointY, boolean checkReflected) {
         if (type == ToolType.LINE) {
-            return distanceToLine(pointX, pointY) <= 6.0;
+            AffineTransform tx = checkReflected ? getReflectionTransform() : getTransform();
+            Point2D p1 = new Point2D.Double(0, 0);
+            Point2D p2 = new Point2D.Double(width, height);
+            Point2D tp1 = tx.transform(p1, null);
+            Point2D tp2 = tx.transform(p2, null);
+            return distanceToLine(pointX, pointY, tp1.getX(), tp1.getY(), tp2.getX(), tp2.getY()) <= 6.0;
         }
 
-        int left = Math.min(x, x + width);
-        int right = Math.max(x, x + width);
-        int top = Math.min(y, y + height);
-        int bottom = Math.max(y, y + height);
-
-        return pointX >= left && pointX <= right && pointY >= top && pointY <= bottom;
+        Shape s = checkReflected ? 
+            getReflectionTransform().createTransformedShape(createBaseShape()) : 
+            getTransformedShape();
+        return s.contains(pointX, pointY);
     }
 
     public void moveBy(int deltaX, int deltaY) {
@@ -70,25 +157,22 @@ public class ShapeObject {
         y += deltaY;
     }
 
-    private double distanceToLine(int pointX, int pointY) {
-        double startX = x;
-        double startY = y;
-        double endX = x + width;
-        double endY = y + height;
-        double lineLengthSquared = Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2);
+    private double distanceToLine(double px, double py, double sx, double sy, double ex, double ey) {
+        double dx = ex - sx;
+        double dy = ey - sy;
+        double lineLengthSquared = dx * dx + dy * dy;
 
         if (lineLengthSquared == 0) {
-            return Math.hypot(pointX - startX, pointY - startY);
+            return Math.hypot(px - sx, py - sy);
         }
 
-        double position = ((pointX - startX) * (endX - startX) + (pointY - startY) * (endY - startY))
-                / lineLengthSquared;
+        double position = ((px - sx) * dx + (py - sy) * dy) / lineLengthSquared;
         position = Math.max(0, Math.min(1, position));
 
-        double projectionX = startX + position * (endX - startX);
-        double projectionY = startY + position * (endY - startY);
+        double projX = sx + position * dx;
+        double projY = sy + position * dy;
 
-        return Math.hypot(pointX - projectionX, pointY - projectionY);
+        return Math.hypot(px - projX, py - projY);
     }
 
     public int getId() {
