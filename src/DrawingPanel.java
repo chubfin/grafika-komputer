@@ -85,25 +85,11 @@ public class DrawingPanel extends JPanel {
     private void drawShape(Graphics2D g2d, ShapeObject shapeObject) {
         Shape shape = createDrawableShape(shapeObject);
 
-        double centerX = shapeObject.getX() + shapeObject.getWidth() / 2.0;
-        double centerY = shapeObject.getY() + shapeObject.getHeight() / 2.0;
-
         AffineTransform originalTransform = g2d.getTransform();
 
         // High-DPI Scaling Fix: Keep the original transform and concatenate
         AffineTransform transform = new AffineTransform(originalTransform);
-
-        //rotasi
-        transform.rotate(Math.toRadians(shapeObject.getRotation()), centerX, centerY);
-
-        //skala
-        transform.translate(centerX, centerY);
-        transform.scale(shapeObject.getScaleX(), shapeObject.getScaleY());
-        transform.translate(-centerX, -centerY);
-
-        transform.translate(centerX, centerY);
-        transform.shear(shapeObject.getSkewX(), shapeObject.getSkewY());
-        transform.translate(-centerX, -centerY);
+        transform.concatenate(shapeObject.getTransform());
 
         g2d.setTransform(transform);
 
@@ -124,25 +110,8 @@ public class DrawingPanel extends JPanel {
 
         // refleksi horizontal
         if (shapeObject.isReflected()) {
-            g2d.setTransform(originalTransform);
-
-            // Reflect across the right boundary of the shape to avoid overlap
-            double axisX = shapeObject.getX() + shapeObject.getWidth();
             AffineTransform reflectTransform = new AffineTransform(originalTransform);
-
-            // Re-apply original base transform transformations
-            reflectTransform.rotate(Math.toRadians(shapeObject.getRotation()), centerX, centerY);
-            reflectTransform.translate(centerX, centerY);
-            reflectTransform.scale(shapeObject.getScaleX(), shapeObject.getScaleY());
-            reflectTransform.translate(-centerX, -centerY);
-            reflectTransform.translate(centerX, centerY);
-            reflectTransform.shear(shapeObject.getSkewX(), shapeObject.getSkewY());
-            reflectTransform.translate(-centerX, -centerY);
-
-            // Horizontal flip at the right edge
-            reflectTransform.translate(axisX, centerY);
-            reflectTransform.scale(-1, 1);
-            reflectTransform.translate(-axisX, -centerY);
+            reflectTransform.concatenate(shapeObject.getReflectionTransform());
 
             g2d.setTransform(reflectTransform);
 
@@ -194,7 +163,10 @@ public class DrawingPanel extends JPanel {
         Shape shape = createDrawableShape(tempShape);
 
         AffineTransform originalTransform = g2d.getTransform();
-        g2d.setTransform(new AffineTransform(originalTransform));
+        AffineTransform previewTx = new AffineTransform(originalTransform);
+        // Posisikan bentuk preview menggunakan translasi ke (x, y)
+        previewTx.translate(x, y);
+        g2d.setTransform(previewTx);
 
         if (tempShape.getType() != ToolType.LINE) {
             g2d.setColor(tempShape.getFillColor());
@@ -209,26 +181,24 @@ public class DrawingPanel extends JPanel {
     }
 
     private Shape createDrawableShape(ShapeObject shapeObject) {
-        int x = shapeObject.getX();
-        int y = shapeObject.getY();
         int width = shapeObject.getWidth();
         int height = shapeObject.getHeight();
 
         switch (shapeObject.getType()) {
             case RECTANGLE:
-                return new Rectangle(x, y, width, height);
+                return new Rectangle(0, 0, width, height);
             case CIRCLE:
-                return new Ellipse2D.Double(x, y, width, height);
+                return new Ellipse2D.Double(0, 0, width, height);
             case TRIANGLE:
                 Polygon triangle = new Polygon();
-                triangle.addPoint(x + width / 2, y);
-                triangle.addPoint(x, y + height);
-                triangle.addPoint(x + width, y + height);
+                triangle.addPoint(width / 2, 0);
+                triangle.addPoint(0, height);
+                triangle.addPoint(width, height);
                 return triangle;
             case LINE:
-                return new Line2D.Double(x, y, x + width, y + height);
+                return new Line2D.Double(0, 0, width, height);
             default:
-                return new Rectangle(x, y, width, height);
+                return new Rectangle(0, 0, width, height);
         }
     }
 

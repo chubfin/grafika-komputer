@@ -60,76 +60,69 @@ public class ShapeObject {
     }
 
     public Shape getTransformedShape() {
-        Shape baseShape = createBaseShape();
-        double centerX = x + width / 2.0;
-        double centerY = y + height / 2.0;
+        return getTransform().createTransformedShape(createBaseShape());
+    }
 
+    public AffineTransform getTransform() {
         AffineTransform transform = new AffineTransform();
 
-        // rotation
+        // 1. Translasi ke posisi absolut (x, y)
+        transform.translate(x, y);
+
+        double centerX = width / 2.0;
+        double centerY = height / 2.0;
+
+        // 2. Rotasi di titik pusat lokal
         transform.rotate(Math.toRadians(rotation), centerX, centerY);
 
-        // scale
+        // 3. Skala di titik pusat lokal
         transform.translate(centerX, centerY);
         transform.scale(scaleX, scaleY);
         transform.translate(-centerX, -centerY);
 
-        // skew/shear
+        // 4. Skew/Shear di titik pusat lokal
         transform.translate(centerX, centerY);
         transform.shear(skewX, skewY);
         transform.translate(-centerX, -centerY);
 
-        return transform.createTransformedShape(baseShape);
+        return transform;
     }
 
     public AffineTransform getReflectionTransform() {
-        double centerX = x + width / 2.0;
+        double axisX = x + width;
         double centerY = y + height / 2.0;
-        double axisX = x + width; // axis of reflection is the right edge of the shape
 
         AffineTransform reflectTransform = new AffineTransform();
-
-        // Base transform (rotation, scale, shear)
-        AffineTransform transform = new AffineTransform();
-        transform.rotate(Math.toRadians(rotation), centerX, centerY);
-        transform.translate(centerX, centerY);
-        transform.scale(scaleX, scaleY);
-        transform.translate(-centerX, -centerY);
-        transform.translate(centerX, centerY);
-        transform.shear(skewX, skewY);
-        transform.translate(-centerX, -centerY);
-
-        reflectTransform.concatenate(transform);
-
-        // Apply horizontal reflection across axisX
+        // Pencerminan horizontal terhadap sumbu axisX
         reflectTransform.translate(axisX, centerY);
         reflectTransform.scale(-1, 1);
         reflectTransform.translate(-axisX, -centerY);
+
+        // Gabungkan dengan matriks transformasi utama shape
+        reflectTransform.concatenate(getTransform());
 
         return reflectTransform;
     }
 
     private Shape createBaseShape() {
-        int x = this.x;
-        int y = this.y;
         int width = this.width;
         int height = this.height;
 
         switch (this.type) {
             case RECTANGLE:
-                return new Rectangle(x, y, width, height);
+                return new Rectangle(0, 0, width, height);
             case CIRCLE:
-                return new Ellipse2D.Double(x, y, width, height);
+                return new Ellipse2D.Double(0, 0, width, height);
             case TRIANGLE:
                 Polygon triangle = new Polygon();
-                triangle.addPoint(x + width / 2, y);
-                triangle.addPoint(x, y + height);
-                triangle.addPoint(x + width, y + height);
+                triangle.addPoint(width / 2, 0);
+                triangle.addPoint(0, height);
+                triangle.addPoint(width, height);
                 return triangle;
             case LINE:
-                return new Line2D.Double(x, y, x + width, y + height);
+                return new Line2D.Double(0, 0, width, height);
             default:
-                return new Rectangle(x, y, width, height);
+                return new Rectangle(0, 0, width, height);
         }
     }
 
@@ -145,34 +138,17 @@ public class ShapeObject {
 
     private boolean containsInShape(int pointX, int pointY, boolean checkReflected) {
         if (type == ToolType.LINE) {
-            AffineTransform tx;
-            if (checkReflected) {
-                tx = getReflectionTransform();
-            } else {
-                double centerX = x + width / 2.0;
-                double centerY = y + height / 2.0;
-                tx = new AffineTransform();
-                tx.rotate(Math.toRadians(rotation), centerX, centerY);
-                tx.translate(centerX, centerY);
-                tx.scale(scaleX, scaleY);
-                tx.translate(-centerX, -centerY);
-                tx.translate(centerX, centerY);
-                tx.shear(skewX, skewY);
-                tx.translate(-centerX, -centerY);
-            }
-            Point2D p1 = new Point2D.Double(x, y);
-            Point2D p2 = new Point2D.Double(x + width, y + height);
+            AffineTransform tx = checkReflected ? getReflectionTransform() : getTransform();
+            Point2D p1 = new Point2D.Double(0, 0);
+            Point2D p2 = new Point2D.Double(width, height);
             Point2D tp1 = tx.transform(p1, null);
             Point2D tp2 = tx.transform(p2, null);
             return distanceToLine(pointX, pointY, tp1.getX(), tp1.getY(), tp2.getX(), tp2.getY()) <= 6.0;
         }
 
-        Shape s;
-        if (checkReflected) {
-            s = getReflectionTransform().createTransformedShape(createBaseShape());
-        } else {
-            s = getTransformedShape();
-        }
+        Shape s = checkReflected ? 
+            getReflectionTransform().createTransformedShape(createBaseShape()) : 
+            getTransformedShape();
         return s.contains(pointX, pointY);
     }
 
