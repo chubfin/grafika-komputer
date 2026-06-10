@@ -801,17 +801,17 @@ public class DrawingPanel extends JPanel {
                     shape.moveBy((int) shape.getAnimSpeedX(), (int) shape.getAnimSpeedY());
                     Rectangle bounds = shape.getTransformedShape().getBounds();
                     if (bounds.x <= cb.x) {
-                        shape.setX(cb.x);
+                        shape.moveBy(cb.x - bounds.x, 0);
                         shape.setAnimSpeedX(-shape.getAnimSpeedX());
                     } else if (bounds.x + bounds.width >= cb.x + cb.width) {
-                        shape.setX(cb.x + cb.width - bounds.width);
+                        shape.moveBy((cb.x + cb.width - bounds.width) - bounds.x, 0);
                         shape.setAnimSpeedX(-shape.getAnimSpeedX());
                     }
                     if (bounds.y <= cb.y) {
-                        shape.setY(cb.y);
+                        shape.moveBy(0, cb.y - bounds.y);
                         shape.setAnimSpeedY(-shape.getAnimSpeedY());
                     } else if (bounds.y + bounds.height >= cb.y + cb.height) {
-                        shape.setY(cb.y + cb.height - bounds.height);
+                        shape.moveBy(0, (cb.y + cb.height - bounds.height) - bounds.y);
                         shape.setAnimSpeedY(-shape.getAnimSpeedY());
                     }
                     break;
