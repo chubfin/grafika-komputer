@@ -1,7 +1,8 @@
 import javax.swing.BorderFactory;
-import javax.swing.JCheckBox;
+import javax.swing.ButtonGroup;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.event.ChangeListener;
@@ -13,6 +14,7 @@ import java.awt.Insets;
 import java.awt.Dimension;
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.FlowLayout;
 
 public class PropertyPanel extends JPanel {
 
@@ -35,7 +37,12 @@ public class PropertyPanel extends JPanel {
     private final JSpinner scaleYSpinner;
     private final JSpinner skewXSpinner;
     private final JSpinner skewYSpinner;
-    private final JCheckBox reflectedCheckbox;
+
+    // Reflection: radio buttons (Horizontal / Vertical / None)
+    private final JRadioButton reflectNoneRadio;
+    private final JRadioButton reflectHorizontalRadio;
+    private final JRadioButton reflectVerticalRadio;
+    private final ButtonGroup reflectionGroup;
 
     private ShapeObject currentShape;
     private Runnable onChangeCallback;
@@ -78,9 +85,19 @@ public class PropertyPanel extends JPanel {
         skewXSpinner = new JSpinner(new SpinnerNumberModel(0.0, -5.0, 5.0, 0.1));
         skewYSpinner = new JSpinner(new SpinnerNumberModel(0.0, -5.0, 5.0, 0.1));
 
-        reflectedCheckbox = new JCheckBox();
-        reflectedCheckbox.setOpaque(false);
-        reflectedCheckbox.setForeground(TEXT);
+        // Radio buttons for reflection
+        reflectNoneRadio = new JRadioButton("None");
+        reflectHorizontalRadio = new JRadioButton("Horizontal");
+        reflectVerticalRadio = new JRadioButton("Vertical");
+        reflectionGroup = new ButtonGroup();
+        reflectionGroup.add(reflectNoneRadio);
+        reflectionGroup.add(reflectHorizontalRadio);
+        reflectionGroup.add(reflectVerticalRadio);
+        reflectNoneRadio.setSelected(true);
+
+        styleRadioButton(reflectNoneRadio);
+        styleRadioButton(reflectHorizontalRadio);
+        styleRadioButton(reflectVerticalRadio);
 
         styleSpinner(xSpinner);
         styleSpinner(ySpinner);
@@ -95,22 +112,32 @@ public class PropertyPanel extends JPanel {
 
         int row = 0;
 
-        addSectionLabel(contentPanel, row++, "── Info ──");
+        // ── Info ──
+        addSectionLabel(contentPanel, row++, "Info");
         addLabelRow(contentPanel, row++, "Type", typeValue);
-        addLabelRow(contentPanel, row++, "Width", widthValue);
-        addLabelRow(contentPanel, row++, "Height", heightValue);
 
-        addSectionLabel(contentPanel, row++, "── Translasi ──");
-        addSpinnerRow(contentPanel, row++, "X", xSpinner);
-        addSpinnerRow(contentPanel, row++, "Y", ySpinner);
+        // Width & Height sejajar dalam satu baris
+        addWidthHeightRow(contentPanel, row++);
 
-        addSectionLabel(contentPanel, row++, "── Transformasi ──");
-        addSpinnerRow(contentPanel, row++, "Rotation (°)", rotationSpinner);
-        addSpinnerRow(contentPanel, row++, "Scale X", scaleXSpinner);
-        addSpinnerRow(contentPanel, row++, "Scale Y", scaleYSpinner);
-        addSpinnerRow(contentPanel, row++, "Skew X", skewXSpinner);
-        addSpinnerRow(contentPanel, row++, "Skew Y", skewYSpinner);
-        addCheckboxRow(contentPanel, row++, "Reflection", reflectedCheckbox);
+        // ── Translasi ──
+        addSectionLabel(contentPanel, row++, "Translasi");
+        // Label "Position" kemudian X Y dalam satu baris di bawahnya
+        addXYLabeledRow(contentPanel, row++, "Position", xSpinner, ySpinner);
+
+        // ── Transformasi ──
+        addSectionLabel(contentPanel, row++, "Transformasi");
+
+        // Rotation: label di atas, spinner di bawah
+        addLabeledSpinnerBlock(contentPanel, row++, "Rotation (°)", rotationSpinner);
+
+        // Scale: label di atas, X Y spinner sejajar
+        addLabeledXYSpinnerRow(contentPanel, row++, "Scale", scaleXSpinner, scaleYSpinner);
+
+        // Skew: label di atas, X Y spinner sejajar
+        addLabeledXYSpinnerRow(contentPanel, row++, "Skew", skewXSpinner, skewYSpinner);
+
+        // Reflection: label di atas, radio buttons di bawah
+        addReflectionBlock(contentPanel, row++);
 
         setupListeners();
     }
@@ -126,7 +153,7 @@ public class PropertyPanel extends JPanel {
             currentShape.setSkewX(((Number) skewXSpinner.getValue()).doubleValue());
             currentShape.setSkewY(((Number) skewYSpinner.getValue()).doubleValue());
             onChangeCallback.run();
-         };
+        };
 
         xSpinner.addChangeListener(listener);
         ySpinner.addChangeListener(listener);
@@ -136,11 +163,15 @@ public class PropertyPanel extends JPanel {
         skewXSpinner.addChangeListener(listener);
         skewYSpinner.addChangeListener(listener);
 
-        reflectedCheckbox.addActionListener(e -> {
+        java.awt.event.ActionListener reflectionListener = e -> {
             if (isUpdating || currentShape == null) return;
-            currentShape.setReflected(reflectedCheckbox.isSelected());
+            // Untuk sekarang reflection = true jika Horizontal atau Vertical dipilih
+            currentShape.setReflected(!reflectNoneRadio.isSelected());
             onChangeCallback.run();
-        });
+        };
+        reflectNoneRadio.addActionListener(reflectionListener);
+        reflectHorizontalRadio.addActionListener(reflectionListener);
+        reflectVerticalRadio.addActionListener(reflectionListener);
     }
 
     public void showShape(ShapeObject shape) {
@@ -159,7 +190,7 @@ public class PropertyPanel extends JPanel {
             scaleYSpinner.setValue(1.0);
             skewXSpinner.setValue(0.0);
             skewYSpinner.setValue(0.0);
-            reflectedCheckbox.setSelected(false);
+            reflectNoneRadio.setSelected(true);
         } else {
             typeValue.setText(shape.getType().getDisplayName());
             widthValue.setText(String.valueOf(shape.getWidth()));
@@ -171,11 +202,19 @@ public class PropertyPanel extends JPanel {
             scaleYSpinner.setValue(shape.getScaleY());
             skewXSpinner.setValue(shape.getSkewX());
             skewYSpinner.setValue(shape.getSkewY());
-            reflectedCheckbox.setSelected(shape.isReflected());
+            if (!shape.isReflected()) {
+                reflectNoneRadio.setSelected(true);
+            } else {
+                reflectHorizontalRadio.setSelected(true);
+            }
         }
 
         isUpdating = false;
     }
+
+    // -------------------------------------------------------------------------
+    // Layout helper methods
+    // -------------------------------------------------------------------------
 
     private void addSectionLabel(JPanel panel, int row, String text) {
         GridBagConstraints gbc = new GridBagConstraints();
@@ -184,7 +223,7 @@ public class PropertyPanel extends JPanel {
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 0, 4, 0);
-        JLabel label = new JLabel(cleanLabel(text));
+        JLabel label = new JLabel(text);
         label.setForeground(TEXT);
         label.setFont(label.getFont().deriveFont(Font.BOLD, 13f));
         label.setOpaque(true);
@@ -195,6 +234,36 @@ public class PropertyPanel extends JPanel {
         panel.add(label, gbc);
     }
 
+    /** Width dan Height sejajar: "W: 120   H: 80" */
+    private void addWidthHeightRow(JPanel panel, int row) {
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = row;
+        gbc.gridwidth = 2;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(4, 0, 4, 0);
+
+        JPanel wh = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        wh.setOpaque(false);
+
+        JLabel wLabel = createFieldLabel("W:");
+        wLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 4));
+        wh.add(wLabel);
+        wh.add(widthValue);
+
+        JLabel spacer = new JLabel("   ");
+        spacer.setForeground(MUTED_TEXT);
+        wh.add(spacer);
+
+        JLabel hLabel = createFieldLabel("H:");
+        hLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 4));
+        wh.add(hLabel);
+        wh.add(heightValue);
+
+        panel.add(wh, gbc);
+    }
+
+    /** Untuk Info: label kiri, value kanan */
     private void addLabelRow(JPanel panel, int row, String label, JLabel valueLabel) {
         GridBagConstraints labelGbc = new GridBagConstraints();
         labelGbc.gridx = 0;
@@ -212,51 +281,197 @@ public class PropertyPanel extends JPanel {
         panel.add(valueLabel, valueGbc);
     }
 
-    private void addSpinnerRow(JPanel panel, int row, String label, JSpinner spinner) {
+    /**
+     * Label di atas ("Position"), lalu X [ spinner ] Y [ spinner ] di bawahnya.
+     */
+    private void addXYLabeledRow(JPanel panel, int row, String labelText,
+                                  JSpinner spinnerX, JSpinner spinnerY) {
+        // Label atas
         GridBagConstraints labelGbc = new GridBagConstraints();
         labelGbc.gridx = 0;
         labelGbc.gridy = row;
+        labelGbc.gridwidth = 2;
         labelGbc.anchor = GridBagConstraints.WEST;
-        labelGbc.insets = new Insets(4, 0, 4, 12);
-        panel.add(createFieldLabel(label), labelGbc);
+        labelGbc.insets = new Insets(6, 0, 2, 0);
+        JLabel lbl = createFieldLabel(labelText);
+        panel.add(lbl, labelGbc);
 
-        GridBagConstraints spinnerGbc = new GridBagConstraints();
-        spinnerGbc.gridx = 1;
-        spinnerGbc.gridy = row;
-        spinnerGbc.weightx = 1.0;
-        spinnerGbc.fill = GridBagConstraints.HORIZONTAL;
-        spinnerGbc.insets = new Insets(4, 0, 4, 0);
-        panel.add(spinner, spinnerGbc);
+        // X Y row
+        GridBagConstraints xyGbc = new GridBagConstraints();
+        xyGbc.gridx = 0;
+        xyGbc.gridy = row + 1;  // will be handled by caller incrementing row
+        // We reuse row; caller passes row for label, we paint both label and xy in sequence
+        // Actually easier: put them in a sub-panel
+        // Let's just override: label row = row, xy inline = row+0 but after adding label
+        // We'll use a sub-panel approach for cleanliness
+        panel.remove(lbl); // remove what we just added, use sub-panel instead
+
+        JPanel block = new JPanel(new GridBagLayout());
+        block.setOpaque(false);
+
+        GridBagConstraints bGbc = new GridBagConstraints();
+        bGbc.gridx = 0; bGbc.gridy = 0;
+        bGbc.gridwidth = 2; bGbc.anchor = GridBagConstraints.WEST;
+        bGbc.insets = new Insets(0, 0, 4, 0);
+        block.add(createFieldLabel(labelText), bGbc);
+
+        // X label + spinner
+        GridBagConstraints xLblGbc = new GridBagConstraints();
+        xLblGbc.gridx = 0; xLblGbc.gridy = 1;
+        xLblGbc.anchor = GridBagConstraints.WEST;
+        xLblGbc.insets = new Insets(0, 0, 0, 4);
+        block.add(createFieldLabel("X:"), xLblGbc);
+
+        GridBagConstraints xSpGbc = new GridBagConstraints();
+        xSpGbc.gridx = 1; xSpGbc.gridy = 1;
+        xSpGbc.weightx = 0.5; xSpGbc.fill = GridBagConstraints.HORIZONTAL;
+        xSpGbc.insets = new Insets(0, 0, 0, 8);
+        block.add(spinnerX, xSpGbc);
+
+        // Y label + spinner
+        GridBagConstraints yLblGbc = new GridBagConstraints();
+        yLblGbc.gridx = 2; yLblGbc.gridy = 1;
+        yLblGbc.anchor = GridBagConstraints.WEST;
+        yLblGbc.insets = new Insets(0, 0, 0, 4);
+        block.add(createFieldLabel("Y:"), yLblGbc);
+
+        GridBagConstraints ySpGbc = new GridBagConstraints();
+        ySpGbc.gridx = 3; ySpGbc.gridy = 1;
+        ySpGbc.weightx = 0.5; ySpGbc.fill = GridBagConstraints.HORIZONTAL;
+        block.add(spinnerY, ySpGbc);
+
+        GridBagConstraints blockGbc = new GridBagConstraints();
+        blockGbc.gridx = 0; blockGbc.gridy = row;
+        blockGbc.gridwidth = 2;
+        blockGbc.fill = GridBagConstraints.HORIZONTAL;
+        blockGbc.insets = new Insets(4, 0, 4, 0);
+        panel.add(block, blockGbc);
     }
 
-    private void addCheckboxRow(JPanel panel, int row, String label, JCheckBox checkbox) {
-        GridBagConstraints labelGbc = new GridBagConstraints();
-        labelGbc.gridx = 0;
-        labelGbc.gridy = row;
-        labelGbc.anchor = GridBagConstraints.WEST;
-        labelGbc.insets = new Insets(4, 0, 4, 12);
-        panel.add(createFieldLabel(label), labelGbc);
+    /**
+     * Label di atas (mis. "Rotation (°)"), spinner full-width di bawahnya.
+     */
+    private void addLabeledSpinnerBlock(JPanel panel, int row, String labelText, JSpinner spinner) {
+        JPanel block = new JPanel(new GridBagLayout());
+        block.setOpaque(false);
 
-        GridBagConstraints checkGbc = new GridBagConstraints();
-        checkGbc.gridx = 1;
-        checkGbc.gridy = row;
-        checkGbc.anchor = GridBagConstraints.WEST;
-        checkGbc.insets = new Insets(4, 0, 4, 0);
-        panel.add(checkbox, checkGbc);
+        GridBagConstraints lblGbc = new GridBagConstraints();
+        lblGbc.gridx = 0; lblGbc.gridy = 0;
+        lblGbc.anchor = GridBagConstraints.WEST;
+        lblGbc.insets = new Insets(0, 0, 4, 0);
+        block.add(createFieldLabel(labelText), lblGbc);
+
+        GridBagConstraints spGbc = new GridBagConstraints();
+        spGbc.gridx = 0; spGbc.gridy = 1;
+        spGbc.weightx = 1.0; spGbc.fill = GridBagConstraints.HORIZONTAL;
+        block.add(spinner, spGbc);
+
+        GridBagConstraints blockGbc = new GridBagConstraints();
+        blockGbc.gridx = 0; blockGbc.gridy = row;
+        blockGbc.gridwidth = 2;
+        blockGbc.fill = GridBagConstraints.HORIZONTAL;
+        blockGbc.insets = new Insets(4, 0, 4, 0);
+        panel.add(block, blockGbc);
+    }
+
+    /**
+     * Label di atas (mis. "Scale"), lalu X [ spinner ] Y [ spinner ] di bawahnya.
+     */
+    private void addLabeledXYSpinnerRow(JPanel panel, int row, String labelText,
+                                         JSpinner spinnerX, JSpinner spinnerY) {
+        JPanel block = new JPanel(new GridBagLayout());
+        block.setOpaque(false);
+
+        // Label atas
+        GridBagConstraints lblGbc = new GridBagConstraints();
+        lblGbc.gridx = 0; lblGbc.gridy = 0;
+        lblGbc.gridwidth = 4; lblGbc.anchor = GridBagConstraints.WEST;
+        lblGbc.insets = new Insets(0, 0, 4, 0);
+        block.add(createFieldLabel(labelText), lblGbc);
+
+        // X label
+        GridBagConstraints xLblGbc = new GridBagConstraints();
+        xLblGbc.gridx = 0; xLblGbc.gridy = 1;
+        xLblGbc.anchor = GridBagConstraints.WEST;
+        xLblGbc.insets = new Insets(0, 0, 0, 4);
+        block.add(createFieldLabel("X:"), xLblGbc);
+
+        // X spinner
+        GridBagConstraints xSpGbc = new GridBagConstraints();
+        xSpGbc.gridx = 1; xSpGbc.gridy = 1;
+        xSpGbc.weightx = 0.5; xSpGbc.fill = GridBagConstraints.HORIZONTAL;
+        xSpGbc.insets = new Insets(0, 0, 0, 8);
+        block.add(spinnerX, xSpGbc);
+
+        // Y label
+        GridBagConstraints yLblGbc = new GridBagConstraints();
+        yLblGbc.gridx = 2; yLblGbc.gridy = 1;
+        yLblGbc.anchor = GridBagConstraints.WEST;
+        yLblGbc.insets = new Insets(0, 0, 0, 4);
+        block.add(createFieldLabel("Y:"), yLblGbc);
+
+        // Y spinner
+        GridBagConstraints ySpGbc = new GridBagConstraints();
+        ySpGbc.gridx = 3; ySpGbc.gridy = 1;
+        ySpGbc.weightx = 0.5; ySpGbc.fill = GridBagConstraints.HORIZONTAL;
+        block.add(spinnerY, ySpGbc);
+
+        GridBagConstraints blockGbc = new GridBagConstraints();
+        blockGbc.gridx = 0; blockGbc.gridy = row;
+        blockGbc.gridwidth = 2;
+        blockGbc.fill = GridBagConstraints.HORIZONTAL;
+        blockGbc.insets = new Insets(4, 0, 4, 0);
+        panel.add(block, blockGbc);
+    }
+
+    /**
+     * Reflection block: label "Reflection" di atas,
+     * radio buttons Horizontal dan Vertical di bawah sejajar.
+     */
+    private void addReflectionBlock(JPanel panel, int row) {
+        JPanel block = new JPanel(new GridBagLayout());
+        block.setOpaque(false);
+
+        // Label "Reflection"
+        GridBagConstraints lblGbc = new GridBagConstraints();
+        lblGbc.gridx = 0; lblGbc.gridy = 0;
+        lblGbc.gridwidth = 3; lblGbc.anchor = GridBagConstraints.WEST;
+        lblGbc.insets = new Insets(0, 0, 4, 0);
+        block.add(createFieldLabel("Reflection"), lblGbc);
+
+        // Radio: None
+        GridBagConstraints noneGbc = new GridBagConstraints();
+        noneGbc.gridx = 0; noneGbc.gridy = 1;
+        noneGbc.anchor = GridBagConstraints.WEST;
+        noneGbc.insets = new Insets(0, 0, 0, 4);
+        block.add(reflectNoneRadio, noneGbc);
+
+        // Radio: Horizontal
+        GridBagConstraints hGbc = new GridBagConstraints();
+        hGbc.gridx = 1; hGbc.gridy = 1;
+        hGbc.anchor = GridBagConstraints.WEST;
+        hGbc.insets = new Insets(0, 0, 0, 4);
+        block.add(reflectHorizontalRadio, hGbc);
+
+        // Radio: Vertical
+        GridBagConstraints vGbc = new GridBagConstraints();
+        vGbc.gridx = 2; vGbc.gridy = 1;
+        vGbc.weightx = 1.0;
+        vGbc.anchor = GridBagConstraints.WEST;
+        block.add(reflectVerticalRadio, vGbc);
+
+        GridBagConstraints blockGbc = new GridBagConstraints();
+        blockGbc.gridx = 0; blockGbc.gridy = row;
+        blockGbc.gridwidth = 2;
+        blockGbc.fill = GridBagConstraints.HORIZONTAL;
+        blockGbc.insets = new Insets(4, 0, 4, 0);
+        panel.add(block, blockGbc);
     }
 
     private JLabel createFieldLabel(String text) {
-        JLabel label = new JLabel(cleanLabel(text));
+        JLabel label = new JLabel(text);
         label.setForeground(MUTED_TEXT);
         return label;
-    }
-
-    private String cleanLabel(String text) {
-        return text
-                .replace("â”€", "")
-                .replace("─", "")
-                .replace("Â°", "")
-                .trim();
     }
 
     private void styleValueLabel(JLabel label) {
@@ -270,5 +485,11 @@ public class PropertyPanel extends JPanel {
         editor.getTextField().setForeground(TEXT);
         editor.getTextField().setCaretColor(TEXT);
         editor.getTextField().setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
+    }
+
+    private void styleRadioButton(JRadioButton radio) {
+        radio.setOpaque(false);
+        radio.setForeground(TEXT);
+        radio.setFont(radio.getFont().deriveFont(12f));
     }
 }
