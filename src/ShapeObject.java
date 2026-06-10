@@ -18,7 +18,12 @@ public class ShapeObject {
     private int height;
 
     private Color fillColor;
+    private Color fillSecondaryColor;
+    private boolean fillEnabled;
+    private boolean gradientFill;
     private Color strokeColor;
+    private float strokeWidth;
+    private LineStyle lineStyle;
     private boolean selected;
 
     private double rotation;
@@ -30,6 +35,7 @@ public class ShapeObject {
 
     public ShapeObject(int id, ToolType type, int x, int y, int width, int height) {
         this(id, type, x, y, width, height, new Color(115, 166, 255), Color.BLACK);
+        this.fillEnabled = false;
     }
 
     public ShapeObject(
@@ -42,6 +48,25 @@ public class ShapeObject {
             Color fillColor,
             Color strokeColor
     ) {
+            this(id, type, x, y, width, height, fillColor, strokeColor, true, false,
+                fillColor, 2.0f, LineStyle.SOLID);
+            }
+
+            public ShapeObject(
+                int id,
+                ToolType type,
+                int x,
+                int y,
+                int width,
+                int height,
+                Color fillColor,
+                Color strokeColor,
+                boolean fillEnabled,
+                boolean gradientFill,
+                Color fillSecondaryColor,
+                float strokeWidth,
+                LineStyle lineStyle
+            ) {
         this.id = id;
         this.type = type;
         this.x = x;
@@ -49,7 +74,12 @@ public class ShapeObject {
         this.width = width;
         this.height = height;
         this.fillColor = fillColor;
+            this.fillSecondaryColor = fillSecondaryColor != null ? fillSecondaryColor : fillColor;
+            this.fillEnabled = fillEnabled;
+            this.gradientFill = gradientFill;
         this.strokeColor = strokeColor;
+            this.strokeWidth = strokeWidth;
+            this.lineStyle = lineStyle != null ? lineStyle : LineStyle.SOLID;
         this.selected = false;
         this.rotation = 0.0;
         this.scaleX = 1.0;
@@ -215,12 +245,52 @@ public class ShapeObject {
         this.fillColor = fillColor;
     }
 
+    public Color getFillSecondaryColor() {
+        return fillSecondaryColor;
+    }
+
+    public void setFillSecondaryColor(Color fillSecondaryColor) {
+        this.fillSecondaryColor = fillSecondaryColor;
+    }
+
+    public boolean isFillEnabled() {
+        return fillEnabled;
+    }
+
+    public void setFillEnabled(boolean fillEnabled) {
+        this.fillEnabled = fillEnabled;
+    }
+
+    public boolean isGradientFill() {
+        return gradientFill;
+    }
+
+    public void setGradientFill(boolean gradientFill) {
+        this.gradientFill = gradientFill;
+    }
+
     public Color getStrokeColor() {
         return strokeColor;
     }
 
     public void setStrokeColor(Color strokeColor) {
         this.strokeColor = strokeColor;
+    }
+
+    public float getStrokeWidth() {
+        return strokeWidth;
+    }
+
+    public void setStrokeWidth(float strokeWidth) {
+        this.strokeWidth = strokeWidth;
+    }
+
+    public LineStyle getLineStyle() {
+        return lineStyle;
+    }
+
+    public void setLineStyle(LineStyle lineStyle) {
+        this.lineStyle = lineStyle != null ? lineStyle : LineStyle.SOLID;
     }
 
     public boolean isSelected() {

@@ -17,6 +17,13 @@ import java.awt.Font;
 
 public class PropertyPanel extends JPanel {
 
+    private static final Color PANEL_BG = new Color(42, 45, 49);
+    private static final Color SECTION_BG = new Color(33, 36, 40);
+    private static final Color FIELD_BG = new Color(27, 30, 34);
+    private static final Color BORDER = new Color(64, 70, 76);
+    private static final Color TEXT = new Color(235, 238, 241);
+    private static final Color MUTED_TEXT = new Color(178, 184, 191);
+
     private final JLabel typeValue;
     private final JLabel widthValue;
     private final JLabel heightValue;
@@ -40,16 +47,24 @@ public class PropertyPanel extends JPanel {
         this.onChangeCallback = onChangeCallback;
 
         setLayout(new BorderLayout());
-        setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        setPreferredSize(new Dimension(220, 0));
+        setBackground(PANEL_BG);
+        setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        setPreferredSize(new Dimension(250, 0));
 
-        JLabel titleLabel = new JLabel("Properties");
+        JLabel titleLabel = new JLabel("Transform");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
+        titleLabel.setForeground(TEXT);
+        titleLabel.setOpaque(true);
+        titleLabel.setBackground(SECTION_BG);
+        titleLabel.setBorder(BorderFactory.createEmptyBorder(9, 12, 9, 12));
         add(titleLabel, BorderLayout.NORTH);
 
         JPanel contentPanel = new JPanel(new GridBagLayout());
+        contentPanel.setBackground(PANEL_BG);
+        contentPanel.setBorder(BorderFactory.createEmptyBorder(8, 12, 12, 12));
         JScrollPane scrollPane = new JScrollPane(contentPanel);
         scrollPane.setBorder(null);
+        scrollPane.getViewport().setBackground(PANEL_BG);
         add(scrollPane, BorderLayout.CENTER);
 
         typeValue = new JLabel("-");
@@ -68,6 +83,19 @@ public class PropertyPanel extends JPanel {
         skewYSpinner = new JSpinner(new SpinnerNumberModel(0.0, -5.0, 5.0, 0.1));
 
         reflectedCheckbox = new JCheckBox();
+        reflectedCheckbox.setOpaque(false);
+        reflectedCheckbox.setForeground(TEXT);
+
+        styleSpinner(xSpinner);
+        styleSpinner(ySpinner);
+        styleSpinner(rotationSpinner);
+        styleSpinner(scaleXSpinner);
+        styleSpinner(scaleYSpinner);
+        styleSpinner(skewXSpinner);
+        styleSpinner(skewYSpinner);
+        styleValueLabel(typeValue);
+        styleValueLabel(widthValue);
+        styleValueLabel(heightValue);
 
         int row = 0;
 
@@ -161,7 +189,13 @@ public class PropertyPanel extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 0, 4, 0);
         JLabel label = new JLabel(text);
-        label.setForeground(Color.GRAY);
+        label.setForeground(TEXT);
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 13f));
+        label.setOpaque(true);
+        label.setBackground(SECTION_BG);
+        label.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 1, 0, new Color(28, 31, 35)),
+                BorderFactory.createEmptyBorder(7, 0, 7, 0)));
         panel.add(label, gbc);
     }
 
@@ -171,7 +205,7 @@ public class PropertyPanel extends JPanel {
         labelGbc.gridy = row;
         labelGbc.anchor = GridBagConstraints.WEST;
         labelGbc.insets = new Insets(4, 0, 4, 12);
-        panel.add(new JLabel(label), labelGbc);
+        panel.add(createFieldLabel(label), labelGbc);
 
         GridBagConstraints valueGbc = new GridBagConstraints();
         valueGbc.gridx = 1;
@@ -188,7 +222,7 @@ public class PropertyPanel extends JPanel {
         labelGbc.gridy = row;
         labelGbc.anchor = GridBagConstraints.WEST;
         labelGbc.insets = new Insets(4, 0, 4, 12);
-        panel.add(new JLabel(label), labelGbc);
+        panel.add(createFieldLabel(label), labelGbc);
 
         GridBagConstraints spinnerGbc = new GridBagConstraints();
         spinnerGbc.gridx = 1;
@@ -205,7 +239,7 @@ public class PropertyPanel extends JPanel {
         labelGbc.gridy = row;
         labelGbc.anchor = GridBagConstraints.WEST;
         labelGbc.insets = new Insets(4, 0, 4, 12);
-        panel.add(new JLabel(label), labelGbc);
+        panel.add(createFieldLabel(label), labelGbc);
 
         GridBagConstraints checkGbc = new GridBagConstraints();
         checkGbc.gridx = 1;
@@ -213,5 +247,24 @@ public class PropertyPanel extends JPanel {
         checkGbc.anchor = GridBagConstraints.WEST;
         checkGbc.insets = new Insets(4, 0, 4, 0);
         panel.add(checkbox, checkGbc);
+    }
+
+    private JLabel createFieldLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setForeground(MUTED_TEXT);
+        return label;
+    }
+
+    private void styleValueLabel(JLabel label) {
+        label.setForeground(TEXT);
+    }
+
+    private void styleSpinner(JSpinner spinner) {
+        spinner.setBorder(BorderFactory.createLineBorder(BORDER));
+        JSpinner.DefaultEditor editor = (JSpinner.DefaultEditor) spinner.getEditor();
+        editor.getTextField().setBackground(FIELD_BG);
+        editor.getTextField().setForeground(TEXT);
+        editor.getTextField().setCaretColor(TEXT);
+        editor.getTextField().setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
     }
 }

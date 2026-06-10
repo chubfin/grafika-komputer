@@ -25,7 +25,12 @@ public class GroupObject extends ShapeObject {
                 computeBounds(members).width,
                 computeBounds(members).height,
                 new Color(0, 0, 0, 0),   // fill transparan
-                Color.BLUE               // stroke biru menandai group
+            Color.BLUE,              // stroke biru menandai group
+            false,
+            false,
+            new Color(0, 0, 0, 0),
+            2.0f,
+            LineStyle.SOLID
         );
         this.members = new ArrayList<>(members);
         // Pastikan semua member tidak "selected" individual

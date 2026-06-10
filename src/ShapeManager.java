@@ -36,6 +36,7 @@ public class ShapeManager {
             Color strokeColor
     ) {
         ShapeObject shape = new ShapeObject(nextId++, type, x, y, width, height, fillColor, strokeColor);
+        shape.setFillEnabled(false);
         shapes.add(shape);
         selectShape(shape);
         return shape;
@@ -59,7 +60,9 @@ public class ShapeManager {
             Color fillColor,
             Color strokeColor
     ) {
-        return new ShapeObject(nextId++, type, x, y, width, height, fillColor, strokeColor);
+        ShapeObject shape = new ShapeObject(nextId++, type, x, y, width, height, fillColor, strokeColor);
+        shape.setFillEnabled(false);
+        return shape;
     }
 
     public List<ShapeObject> getShapes() {

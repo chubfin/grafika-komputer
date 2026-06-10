@@ -2,8 +2,10 @@ import javax.swing.JPanel;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Paint;
 import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.Rectangle;
@@ -23,6 +25,12 @@ import javax.swing.JColorChooser;
 
 public class DrawingPanel extends JPanel {
 
+    private static final Color CANVAS_BG = new Color(27, 30, 33);
+    private static final Color GRID_MINOR = new Color(64, 68, 72);
+    private static final Color GRID_MAJOR = new Color(83, 88, 94);
+    private static final Color SELECTION_BLUE = new Color(55, 142, 219);
+    private static final Color SELECTION_FILL = new Color(55, 142, 219, 28);
+
     private final ShapeManager shapeManager;
     private final Consumer<ShapeObject> selectionListener;
 
@@ -34,7 +42,12 @@ public class DrawingPanel extends JPanel {
 
     private ToolType currentTool;
     private Color currentFillColor;
+    private Color currentFillSecondaryColor;
+    private boolean currentFillEnabled;
+    private boolean currentGradientFill;
     private Color currentStrokeColor;
+    private float currentStrokeWidth;
+    private LineStyle currentLineStyle;
     private Point dragStartPoint;
     private Point lastDragPoint;
     private Point currentDragPoint;
@@ -51,13 +64,18 @@ public class DrawingPanel extends JPanel {
         this.selectionListener = selectionListener;
         this.currentTool = ToolType.SELECT;
         this.currentFillColor = new Color(115, 166, 255);
+        this.currentFillSecondaryColor = new Color(173, 216, 230);
+        this.currentFillEnabled = false;
+        this.currentGradientFill = false;
         this.currentStrokeColor = Color.BLACK;
+        this.currentStrokeWidth = 2.0f;
+        this.currentLineStyle = LineStyle.SOLID;
         this.draggingSelectedShape = false;
 
         // Inisialisasi HistoryManager - Anggota 4
         this.historyManager = new HistoryManager();
 
-        setBackground(Color.WHITE);
+        setBackground(CANVAS_BG);
         setFocusable(true);
         setupMouseHandlers();
         setupKeyboardHandlers();
@@ -84,6 +102,30 @@ public class DrawingPanel extends JPanel {
         this.currentFillColor = currentFillColor;
     }
 
+    public Color getCurrentFillSecondaryColor() {
+        return currentFillSecondaryColor;
+    }
+
+    public void setCurrentFillSecondaryColor(Color currentFillSecondaryColor) {
+        this.currentFillSecondaryColor = currentFillSecondaryColor;
+    }
+
+    public boolean isCurrentFillEnabled() {
+        return currentFillEnabled;
+    }
+
+    public void setCurrentFillEnabled(boolean currentFillEnabled) {
+        this.currentFillEnabled = currentFillEnabled;
+    }
+
+    public boolean isCurrentGradientFill() {
+        return currentGradientFill;
+    }
+
+    public void setCurrentGradientFill(boolean currentGradientFill) {
+        this.currentGradientFill = currentGradientFill;
+    }
+
     public Color getCurrentStrokeColor() {
         return currentStrokeColor;
     }
@@ -92,12 +134,29 @@ public class DrawingPanel extends JPanel {
         this.currentStrokeColor = currentStrokeColor;
     }
 
+    public float getCurrentStrokeWidth() {
+        return currentStrokeWidth;
+    }
+
+    public void setCurrentStrokeWidth(float currentStrokeWidth) {
+        this.currentStrokeWidth = currentStrokeWidth;
+    }
+
+    public LineStyle getCurrentLineStyle() {
+        return currentLineStyle;
+    }
+
+    public void setCurrentLineStyle(LineStyle currentLineStyle) {
+        this.currentLineStyle = currentLineStyle != null ? currentLineStyle : LineStyle.SOLID;
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
         Graphics2D g2d = (Graphics2D) g.create();
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        drawGrid(g2d);
 
         // Gambar semua shape (GroupObject sudah digambar via member-nya)
         for (ShapeObject shapeObject : shapeManager.getShapes()) {
@@ -124,6 +183,21 @@ public class DrawingPanel extends JPanel {
         g2d.dispose();
     }
 
+    private void drawGrid(Graphics2D g2d) {
+        int minor = 12;
+        int major = minor * 5;
+        g2d.setStroke(new BasicStroke(1f));
+
+        for (int x = 0; x < getWidth(); x += minor) {
+            g2d.setColor(x % major == 0 ? GRID_MAJOR : GRID_MINOR);
+            g2d.drawLine(x, 0, x, getHeight());
+        }
+        for (int y = 0; y < getHeight(); y += minor) {
+            g2d.setColor(y % major == 0 ? GRID_MAJOR : GRID_MINOR);
+            g2d.drawLine(0, y, getWidth(), y);
+        }
+    }
+
     /** Gambar group: gambar semua member, lalu outline bounding box group. */
     private void drawGroup(Graphics2D g2d, GroupObject group) {
         for (ShapeObject member : group.getMembers()) {
@@ -138,8 +212,8 @@ public class DrawingPanel extends JPanel {
 
         // Highlight selection
         if (group.isSelected()) {
-            g2d.setStroke(new BasicStroke(2.5f));
-            g2d.setColor(Color.RED);
+            g2d.setStroke(new BasicStroke(2.2f));
+            g2d.setColor(SELECTION_BLUE);
             g2d.draw(new Rectangle(bounds.x - 3, bounds.y - 3,
                     bounds.width + 6, bounds.height + 6));
         }
@@ -154,19 +228,28 @@ public class DrawingPanel extends JPanel {
         transform.concatenate(shapeObject.getTransform());
         g2d.setTransform(transform);
 
-        if (shapeObject.getType() != ToolType.LINE) {
-            g2d.setColor(shapeObject.getFillColor());
+        if (shapeObject.getType() != ToolType.LINE && shapeObject.isFillEnabled()) {
+            Paint paint = shapeObject.isGradientFill()
+                    ? new GradientPaint(0, 0, shapeObject.getFillColor(),
+                    Math.max(1, shapeObject.getWidth()), Math.max(1, shapeObject.getHeight()),
+                    shapeObject.getFillSecondaryColor())
+                    : shapeObject.getFillColor();
+            g2d.setPaint(paint);
             g2d.fill(shape);
         }
 
-        g2d.setStroke(new BasicStroke(2));
+        g2d.setStroke(createStroke(shapeObject.getStrokeWidth(), shapeObject.getLineStyle()));
         g2d.setColor(shapeObject.getStrokeColor());
         g2d.draw(shape);
 
         if (shapeObject.isSelected()) {
+            Rectangle bounds = shape.getBounds();
+            g2d.setColor(SELECTION_FILL);
+            g2d.fill(bounds);
             g2d.setStroke(new BasicStroke(2));
-            g2d.setColor(Color.RED);
-            g2d.draw(shape.getBounds2D());
+            g2d.setColor(SELECTION_BLUE);
+            g2d.draw(bounds);
+            drawSelectionHandles(g2d, bounds);
         }
 
         // refleksi horizontal
@@ -175,23 +258,49 @@ public class DrawingPanel extends JPanel {
             reflectTransform.concatenate(shapeObject.getReflectionTransform());
             g2d.setTransform(reflectTransform);
 
-            if (shapeObject.getType() != ToolType.LINE) {
+            if (shapeObject.getType() != ToolType.LINE && shapeObject.isFillEnabled()) {
                 Color fillColor = shapeObject.getFillColor();
-                g2d.setColor(new Color(fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue(), 120));
+                if (shapeObject.isGradientFill()) {
+                    Paint paint = new GradientPaint(0, 0,
+                            new Color(fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue(), 120),
+                            Math.max(1, shapeObject.getWidth()), Math.max(1, shapeObject.getHeight()),
+                            new Color(shapeObject.getFillSecondaryColor().getRed(),
+                                    shapeObject.getFillSecondaryColor().getGreen(),
+                                    shapeObject.getFillSecondaryColor().getBlue(), 120));
+                    g2d.setPaint(paint);
+                } else {
+                    g2d.setColor(new Color(fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue(), 120));
+                }
                 g2d.fill(shape);
             }
-            g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
-                    10, new float[]{6, 4}, 0));
+            g2d.setStroke(createStroke(shapeObject.getStrokeWidth(), shapeObject.getLineStyle()));
             g2d.setColor(shapeObject.getStrokeColor());
             g2d.draw(shape);
 
             if (shapeObject.isSelected()) {
                 g2d.setStroke(new BasicStroke(2));
-                g2d.setColor(Color.RED);
+                g2d.setColor(SELECTION_BLUE);
                 g2d.draw(shape.getBounds2D());
             }
         }
         g2d.setTransform(originalTransform);
+    }
+
+    private void drawSelectionHandles(Graphics2D g2d, Rectangle bounds) {
+        int size = 8;
+        int half = size / 2;
+        int[] xs = {bounds.x, bounds.x + bounds.width / 2, bounds.x + bounds.width};
+        int[] ys = {bounds.y, bounds.y + bounds.height / 2, bounds.y + bounds.height};
+
+        g2d.setColor(SELECTION_BLUE);
+        for (int x : xs) {
+            for (int y : ys) {
+                if (x == bounds.x + bounds.width / 2 && y == bounds.y + bounds.height / 2) {
+                    continue;
+                }
+                g2d.fillOval(x - half, y - half, size, size);
+            }
+        }
     }
 
     /**
@@ -214,15 +323,17 @@ public class DrawingPanel extends JPanel {
                 if (!areaA.isEmpty()) {
                     // Gunakan warna custom kalau sudah di-set, kalau tidak blend otomatis
                     Color custom = shapeManager.getIntersectionColor(a, b);
-                    Color ic = (custom != null) ? custom : blendColors(a.getFillColor(), b.getFillColor());
+                    if (custom == null) {
+                        continue;
+                    }
 
                     g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.6f));
-                    g2d.setColor(ic);
+                    g2d.setColor(custom);
                     g2d.fill(areaA);
                     g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
                     g2d.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
                             10, new float[]{4, 3}, 0));
-                    g2d.setColor(ic.darker());
+                    g2d.setColor(custom.darker());
                     g2d.draw(areaA);
                 }
             }
@@ -268,11 +379,11 @@ public class DrawingPanel extends JPanel {
         int w = Math.abs(currentDragPoint.x - dragStartPoint.x);
         int h = Math.abs(currentDragPoint.y - dragStartPoint.y);
 
-        g2d.setColor(new Color(0, 100, 220, 30));
+        g2d.setColor(new Color(55, 142, 219, 35));
         g2d.fillRect(x, y, w, h);
         g2d.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
                 10, new float[]{4, 3}, 0));
-        g2d.setColor(new Color(0, 100, 220));
+        g2d.setColor(SELECTION_BLUE);
         g2d.drawRect(x, y, w, h);
     }
 
@@ -294,13 +405,13 @@ public class DrawingPanel extends JPanel {
         }
 
         ShapeObject tempShape = new ShapeObject(-1, currentTool, x, y, width, height);
-        tempShape.setFillColor(new Color(
-                currentFillColor.getRed(),
-                currentFillColor.getGreen(),
-                currentFillColor.getBlue(),
-                100
-        ));
+        tempShape.setFillColor(currentFillColor);
+        tempShape.setFillSecondaryColor(currentFillSecondaryColor);
+        tempShape.setFillEnabled(currentFillEnabled);
+        tempShape.setGradientFill(currentGradientFill);
         tempShape.setStrokeColor(currentStrokeColor);
+        tempShape.setStrokeWidth(currentStrokeWidth);
+        tempShape.setLineStyle(currentLineStyle);
 
         Shape shape = createDrawableShape(tempShape);
 
@@ -309,13 +420,18 @@ public class DrawingPanel extends JPanel {
         previewTx.translate(x, y);
         g2d.setTransform(previewTx);
 
-        if (tempShape.getType() != ToolType.LINE) {
-            g2d.setColor(tempShape.getFillColor());
+        if (tempShape.getType() != ToolType.LINE && tempShape.isFillEnabled()) {
+            if (tempShape.isGradientFill()) {
+                g2d.setPaint(new GradientPaint(0, 0, tempShape.getFillColor(),
+                        Math.max(1, tempShape.getWidth()), Math.max(1, tempShape.getHeight()),
+                        tempShape.getFillSecondaryColor()));
+            } else {
+                g2d.setColor(tempShape.getFillColor());
+            }
             g2d.fill(shape);
         }
 
-        g2d.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
-                10.0f, new float[]{5.0f, 5.0f}, 0.0f));
+        g2d.setStroke(createStroke(tempShape.getStrokeWidth(), tempShape.getLineStyle()));
         g2d.setColor(tempShape.getStrokeColor());
         g2d.draw(shape);
 
@@ -495,6 +611,11 @@ public class DrawingPanel extends JPanel {
                 currentTool, x, y, width, height,
                 currentFillColor, currentStrokeColor
         );
+        createdShape.setFillEnabled(currentFillEnabled);
+        createdShape.setGradientFill(currentGradientFill);
+        createdShape.setFillSecondaryColor(currentFillSecondaryColor);
+        createdShape.setStrokeWidth(currentStrokeWidth);
+        createdShape.setLineStyle(currentLineStyle);
         historyManager.executeCommand(new AddShapeCommand(shapeManager, createdShape));
 
         selectionListener.accept(createdShape);
@@ -503,5 +624,20 @@ public class DrawingPanel extends JPanel {
 
     private void notifySelectionChanged() {
         selectionListener.accept(shapeManager.getSelectedShape());
+    }
+
+    private BasicStroke createStroke(float width, LineStyle style) {
+        float strokeWidth = Math.max(1.0f, width);
+        float[] dash = null;
+        if (style == LineStyle.DASHED) {
+            dash = new float[]{12.0f, 8.0f};
+        } else if (style == LineStyle.DOTTED) {
+            dash = new float[]{2.0f, 6.0f};
+        }
+        if (dash == null) {
+            return new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+        }
+        return new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
+                10.0f, dash, 0.0f);
     }
 }

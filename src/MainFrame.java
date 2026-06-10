@@ -2,6 +2,11 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.GridLayout;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.BasicStroke;
+import java.awt.Polygon;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -20,34 +25,52 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
 import javax.swing.JToggleButton;
+import javax.swing.UIManager;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 public class MainFrame extends JFrame {
 
+    private static final Color APP_BG = new Color(28, 31, 34);
+    private static final Color PANEL_BG = new Color(42, 45, 49);
+    private static final Color TOOL_BG = new Color(35, 39, 43);
+    private static final Color TOOL_SELECTED = new Color(47, 63, 78);
+    private static final Color BORDER = new Color(64, 70, 76);
+    private static final Color TEXT = new Color(235, 238, 241);
+    private static final Color ACCENT = new Color(55, 142, 219);
+
     private final ShapeManager shapeManager;
     private final DrawingPanel drawingPanel;
     private final PropertyPanel propertyPanel;
+    private final StylePanel stylePanel;
     private final JLabel statusLabel;
-    private JButton fillColorButton;
-    private JButton strokeColorButton;
 
     public MainFrame() {
+        installDarkTheme();
+
         shapeManager = new ShapeManager();
         drawingPanel = new DrawingPanel(shapeManager, this::onSelectionChanged);
         propertyPanel = new PropertyPanel(() -> drawingPanel.repaint());
+        stylePanel = new StylePanel(shapeManager, drawingPanel,
+                () -> {
+                    drawingPanel.repaint();
+                    onSelectionChanged(shapeManager.getSelectedShape());
+                });
         statusLabel = new JLabel("Ready");
+        statusLabel.setForeground(TEXT);
 
-        setTitle("Simple Paint - Grafika Komputer");
-        setSize(1200, 700);
+        setTitle("VectorFlow - Grafika Komputer");
+        setSize(1200, 800);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
+        getContentPane().setBackground(APP_BG);
 
         setJMenuBar(createMenuBar());
         add(createToolBar(), BorderLayout.WEST);
         add(drawingPanel, BorderLayout.CENTER);
-        add(propertyPanel, BorderLayout.EAST);
+        add(createRightPanel(), BorderLayout.EAST);
         add(createStatusBar(), BorderLayout.SOUTH);
 
         setVisible(true);
@@ -55,6 +78,8 @@ public class MainFrame extends JFrame {
 
     private JMenuBar createMenuBar() {
         JMenuBar menuBar = new JMenuBar();
+        menuBar.setBackground(PANEL_BG);
+        menuBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(22, 24, 27)));
         menuBar.add(createFileMenu());
         menuBar.add(createEditMenu());
         menuBar.add(createTransformMenu());
@@ -372,13 +397,51 @@ public class MainFrame extends JFrame {
         JMenu styleMenu = new JMenu("Style");
 
         JMenuItem fillColorItem = new JMenuItem("Fill Color");
-        fillColorItem.addActionListener(e -> chooseFillColor());
+        fillColorItem.addActionListener(e -> stylePanel.chooseFillColor());
+
+        JMenuItem noFillItem = new JMenuItem("No Fill");
+        noFillItem.addActionListener(e -> stylePanel.setFillEnabled(false));
+
+        JMenuItem gradientStartItem = new JMenuItem("Gradient Start Color");
+        gradientStartItem.addActionListener(e -> stylePanel.chooseFillColor());
+
+        JMenuItem gradientEndItem = new JMenuItem("Gradient End Color");
+        gradientEndItem.addActionListener(e -> stylePanel.chooseFillSecondaryColor());
+
+        JMenuItem gradientOnItem = new JMenuItem("Enable Gradient");
+        gradientOnItem.addActionListener(e -> stylePanel.setGradientEnabled(true));
+
+        JMenuItem gradientOffItem = new JMenuItem("Disable Gradient");
+        gradientOffItem.addActionListener(e -> stylePanel.setGradientEnabled(false));
 
         JMenuItem strokeColorItem = new JMenuItem("Stroke Color");
-        strokeColorItem.addActionListener(e -> chooseStrokeColor());
+        strokeColorItem.addActionListener(e -> stylePanel.chooseStrokeColor());
+
+        JMenuItem strokeWidthItem = new JMenuItem("Stroke Width...");
+        strokeWidthItem.addActionListener(e -> promptStrokeWidth());
+
+        JMenu lineStyleMenu = new JMenu("Line Style");
+        JMenuItem solidItem = new JMenuItem("Solid");
+        solidItem.addActionListener(e -> stylePanel.setLineStyle(LineStyle.SOLID));
+        JMenuItem dashedItem = new JMenuItem("Dashed");
+        dashedItem.addActionListener(e -> stylePanel.setLineStyle(LineStyle.DASHED));
+        JMenuItem dottedItem = new JMenuItem("Dotted");
+        dottedItem.addActionListener(e -> stylePanel.setLineStyle(LineStyle.DOTTED));
+        lineStyleMenu.add(solidItem);
+        lineStyleMenu.add(dashedItem);
+        lineStyleMenu.add(dottedItem);
 
         styleMenu.add(fillColorItem);
+        styleMenu.add(noFillItem);
+        styleMenu.addSeparator();
+        styleMenu.add(gradientStartItem);
+        styleMenu.add(gradientEndItem);
+        styleMenu.add(gradientOnItem);
+        styleMenu.add(gradientOffItem);
+        styleMenu.addSeparator();
         styleMenu.add(strokeColorItem);
+        styleMenu.add(strokeWidthItem);
+        styleMenu.add(lineStyleMenu);
         return styleMenu;
     }
 
@@ -387,9 +450,10 @@ public class MainFrame extends JFrame {
     // =========================================================================
 
     private JPanel createToolBar() {
-        JPanel toolBar = new JPanel(new GridLayout(7, 1, 6, 6));
-        toolBar.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        toolBar.setPreferredSize(new Dimension(130, 0));
+        JPanel toolBar = new JPanel(new GridLayout(5, 1, 0, 8));
+        toolBar.setBackground(TOOL_BG);
+        toolBar.setBorder(BorderFactory.createEmptyBorder(22, 6, 22, 6));
+        toolBar.setPreferredSize(new Dimension(56, 0));
 
         ButtonGroup toolGroup = new ButtonGroup();
         addToolButton(toolBar, toolGroup, ToolType.SELECT, true);
@@ -398,19 +462,26 @@ public class MainFrame extends JFrame {
         addToolButton(toolBar, toolGroup, ToolType.TRIANGLE, false);
         addToolButton(toolBar, toolGroup, ToolType.LINE, false);
 
-        fillColorButton = createColorButton("Fill", drawingPanel.getCurrentFillColor());
-        fillColorButton.addActionListener(e -> chooseFillColor());
-        toolBar.add(fillColorButton);
-
-        strokeColorButton = createColorButton("Stroke", drawingPanel.getCurrentStrokeColor());
-        strokeColorButton.addActionListener(e -> chooseStrokeColor());
-        toolBar.add(strokeColorButton);
-
         return toolBar;
     }
 
+    private JPanel createRightPanel() {
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.setBackground(PANEL_BG);
+        tabs.setForeground(TEXT);
+        tabs.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, new Color(21, 24, 27)));
+        tabs.addTab("PropertyPanel", propertyPanel);
+        tabs.addTab("Style", stylePanel);
+
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setPreferredSize(new Dimension(250, 0));
+        panel.setBackground(PANEL_BG);
+        panel.add(tabs, BorderLayout.CENTER);
+        return panel;
+    }
+
     private void addToolButton(JPanel toolBar, ButtonGroup toolGroup, ToolType toolType, boolean selected) {
-        JToggleButton button = new JToggleButton(toolType.getDisplayName());
+        JToggleButton button = new ToolButton(toolType);
         button.setSelected(selected);
         button.addActionListener(e -> {
             drawingPanel.setCurrentTool(toolType);
@@ -421,71 +492,9 @@ public class MainFrame extends JFrame {
         toolBar.add(button);
     }
 
-    private JButton createColorButton(String text, Color color) {
-        JButton button = new JButton(text);
-        button.setBackground(color);
-        button.setOpaque(true);
-        button.setBorderPainted(true);
-        return button;
-    }
-
     // =========================================================================
     // Color choosers — bekerja untuk single dan multi-selection
     // =========================================================================
-
-    private void chooseFillColor() {
-        List<ShapeObject> selected = shapeManager.getSelectedShapes();
-        Color initialColor = selected.isEmpty()
-                ? drawingPanel.getCurrentFillColor()
-                : selected.get(0).getFillColor();
-
-        Color selectedColor = JColorChooser.showDialog(this, "Choose Fill Color", initialColor);
-        if (selectedColor == null) return;
-
-        if (!selected.isEmpty()) {
-            for (ShapeObject s : selected) {
-                if (s instanceof GroupObject) {
-                    for (ShapeObject m : ((GroupObject) s).getMembers()) {
-                        m.setFillColor(selectedColor);
-                    }
-                } else {
-                    s.setFillColor(selectedColor);
-                }
-            }
-            drawingPanel.repaint();
-        } else {
-            drawingPanel.setCurrentFillColor(selectedColor);
-        }
-        fillColorButton.setBackground(selectedColor);
-        statusLabel.setText("Fill color updated");
-    }
-
-    private void chooseStrokeColor() {
-        List<ShapeObject> selected = shapeManager.getSelectedShapes();
-        Color initialColor = selected.isEmpty()
-                ? drawingPanel.getCurrentStrokeColor()
-                : selected.get(0).getStrokeColor();
-
-        Color selectedColor = JColorChooser.showDialog(this, "Choose Stroke Color", initialColor);
-        if (selectedColor == null) return;
-
-        if (!selected.isEmpty()) {
-            for (ShapeObject s : selected) {
-                if (s instanceof GroupObject) {
-                    for (ShapeObject m : ((GroupObject) s).getMembers()) {
-                        m.setStrokeColor(selectedColor);
-                    }
-                } else {
-                    s.setStrokeColor(selectedColor);
-                }
-            }
-            drawingPanel.repaint();
-        } else {
-            drawingPanel.setCurrentStrokeColor(selectedColor);
-        }
-        strokeColorButton.setBackground(selectedColor);
-        statusLabel.setText("Stroke color updated");
-    }
 
     // =========================================================================
     // Status bar & selection callback
@@ -493,8 +502,41 @@ public class MainFrame extends JFrame {
 
     private JPanel createStatusBar() {
         JPanel statusBar = new JPanel(new BorderLayout());
-        statusBar.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
+        statusBar.setBackground(PANEL_BG);
+        statusBar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(24, 27, 30)));
         statusBar.add(statusLabel, BorderLayout.WEST);
+
+        JPanel actions = new JPanel(new GridLayout(1, 3, 8, 0));
+        actions.setOpaque(false);
+        actions.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 10));
+        actions.add(createStatusButton("Undo", () -> {
+            HistoryManager history = drawingPanel.getHistoryManager();
+            if (history.undo()) {
+                drawingPanel.repaint();
+                onSelectionChanged(shapeManager.getSelectedShape());
+                statusLabel.setText("Undo berhasil");
+            } else {
+                statusLabel.setText("Tidak ada aksi yang bisa di-undo");
+            }
+        }));
+        actions.add(createStatusButton("Redo", () -> {
+            HistoryManager history = drawingPanel.getHistoryManager();
+            if (history.redo()) {
+                drawingPanel.repaint();
+                onSelectionChanged(shapeManager.getSelectedShape());
+                statusLabel.setText("Redo berhasil");
+            } else {
+                statusLabel.setText("Tidak ada aksi yang bisa di-redo");
+            }
+        }));
+        actions.add(createStatusButton("Clear Canvas", () -> {
+            shapeManager.clearAll();
+            drawingPanel.getHistoryManager().clearHistory();
+            drawingPanel.repaint();
+            onSelectionChanged(null);
+            statusLabel.setText("Kanvas dibersihkan");
+        }));
+        statusBar.add(actions, BorderLayout.EAST);
         return statusBar;
     }
 
@@ -503,27 +545,144 @@ public class MainFrame extends JFrame {
 
         if (selected.isEmpty()) {
             propertyPanel.showShape(null);
+            stylePanel.showShape(null);
             statusLabel.setText("No object selected");
-            fillColorButton.setBackground(drawingPanel.getCurrentFillColor());
-            strokeColorButton.setBackground(drawingPanel.getCurrentStrokeColor());
             return;
         }
 
+        ShapeObject s = selected.get(0);
+        stylePanel.showShape(s);
+
         if (selected.size() == 1) {
-            ShapeObject s = selected.get(0);
             propertyPanel.showShape(s);
             String label = (s instanceof GroupObject)
                     ? "Group (" + ((GroupObject) s).getMembers().size() + " shapes)"
                     : s.getType().getDisplayName() + " #" + s.getId();
             statusLabel.setText("Selected: " + label);
-            fillColorButton.setBackground(s.getFillColor());
-            strokeColorButton.setBackground(s.getStrokeColor());
         } else {
             // Multi-selection: tampilkan info jumlah
             propertyPanel.showShape(null);
             statusLabel.setText("Selected: " + selected.size() + " shapes");
-            fillColorButton.setBackground(selected.get(0).getFillColor());
-            strokeColorButton.setBackground(selected.get(0).getStrokeColor());
+        }
+    }
+
+    private void promptStrokeWidth() {
+        String input = JOptionPane.showInputDialog(
+                this,
+                "Masukkan stroke width (1.0 - 30.0):",
+                String.valueOf(drawingPanel.getCurrentStrokeWidth()));
+        if (input == null) {
+            return;
+        }
+
+        try {
+            float width = Float.parseFloat(input.trim());
+            width = Math.max(1.0f, Math.min(30.0f, width));
+            stylePanel.setStrokeWidth(width);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Stroke width harus berupa angka.",
+                    "Input tidak valid",
+                    JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    private void installDarkTheme() {
+        UIManager.put("Panel.background", PANEL_BG);
+        UIManager.put("OptionPane.background", PANEL_BG);
+        UIManager.put("OptionPane.messageForeground", TEXT);
+        UIManager.put("MenuBar.background", PANEL_BG);
+        UIManager.put("Menu.background", PANEL_BG);
+        UIManager.put("Menu.foreground", TEXT);
+        UIManager.put("MenuItem.background", PANEL_BG);
+        UIManager.put("MenuItem.foreground", TEXT);
+        UIManager.put("Label.foreground", TEXT);
+        UIManager.put("TabbedPane.background", PANEL_BG);
+        UIManager.put("TabbedPane.foreground", TEXT);
+        UIManager.put("TabbedPane.selected", TOOL_BG);
+        UIManager.put("Button.background", new Color(52, 58, 64));
+        UIManager.put("Button.foreground", TEXT);
+        UIManager.put("ToggleButton.background", TOOL_BG);
+        UIManager.put("ToggleButton.foreground", TEXT);
+        UIManager.put("CheckBox.background", PANEL_BG);
+        UIManager.put("CheckBox.foreground", TEXT);
+        UIManager.put("ComboBox.background", new Color(31, 34, 38));
+        UIManager.put("ComboBox.foreground", TEXT);
+        UIManager.put("Spinner.background", new Color(31, 34, 38));
+        UIManager.put("Spinner.foreground", TEXT);
+        UIManager.put("ScrollPane.background", PANEL_BG);
+        UIManager.put("Viewport.background", PANEL_BG);
+    }
+
+    private JButton createStatusButton(String text, Runnable action) {
+        JButton button = new JButton(text);
+        button.setFocusPainted(false);
+        button.setForeground(TEXT);
+        button.setBackground(new Color(49, 54, 60));
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER),
+                BorderFactory.createEmptyBorder(5, 12, 5, 12)));
+        button.addActionListener(e -> action.run());
+        return button;
+    }
+
+    private final class ToolButton extends JToggleButton {
+        private final ToolType toolType;
+
+        private ToolButton(ToolType toolType) {
+            this.toolType = toolType;
+            setPreferredSize(new Dimension(44, 44));
+            setMinimumSize(new Dimension(44, 44));
+            setMaximumSize(new Dimension(44, 44));
+            setToolTipText(toolType.getDisplayName());
+            setText("");
+            setFocusPainted(false);
+            setContentAreaFilled(false);
+            setBorder(BorderFactory.createEmptyBorder());
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(isSelected() ? TOOL_SELECTED : TOOL_BG);
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+            if (isSelected()) {
+                g2.setColor(ACCENT);
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 6, 6);
+            }
+            g2.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.setColor(isSelected() ? new Color(83, 171, 255) : TEXT);
+            paintToolIcon(g2, toolType);
+            g2.dispose();
+        }
+
+        private void paintToolIcon(Graphics2D g2, ToolType type) {
+            int cx = getWidth() / 2;
+            int cy = getHeight() / 2;
+            if (type == ToolType.SELECT) {
+                Polygon p = new Polygon();
+                p.addPoint(cx - 8, cy - 13);
+                p.addPoint(cx - 7, cy + 12);
+                p.addPoint(cx, cy + 5);
+                p.addPoint(cx + 7, cy + 13);
+                p.addPoint(cx + 10, cy + 10);
+                p.addPoint(cx + 4, cy + 2);
+                p.addPoint(cx + 13, cy + 2);
+                g2.drawPolygon(p);
+            } else if (type == ToolType.RECTANGLE) {
+                g2.drawRect(cx - 13, cy - 10, 26, 20);
+            } else if (type == ToolType.CIRCLE) {
+                g2.drawOval(cx - 13, cy - 13, 26, 26);
+            } else if (type == ToolType.TRIANGLE) {
+                Polygon p = new Polygon();
+                p.addPoint(cx, cy - 14);
+                p.addPoint(cx - 13, cy + 12);
+                p.addPoint(cx + 13, cy + 12);
+                g2.drawPolygon(p);
+            } else if (type == ToolType.LINE) {
+                g2.drawLine(cx - 13, cy + 12, cx + 13, cy - 12);
+            }
         }
     }
 }
