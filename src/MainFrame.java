@@ -6,6 +6,8 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.BasicStroke;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Polygon;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -455,8 +457,8 @@ public class MainFrame extends JFrame {
         JPanel toolBar = new JPanel();
         toolBar.setLayout(new BoxLayout(toolBar, BoxLayout.Y_AXIS));
         toolBar.setBackground(TOOL_BG);
-        toolBar.setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
-        toolBar.setPreferredSize(new Dimension(44, 0));
+        toolBar.setBorder(BorderFactory.createEmptyBorder(10, 6, 10, 6));
+        toolBar.setPreferredSize(new Dimension(74, 0));
 
         ButtonGroup toolGroup = new ButtonGroup();
         addToolButton(toolBar, toolGroup, ToolType.SELECT, true);
@@ -495,7 +497,7 @@ public class MainFrame extends JFrame {
 
         toolGroup.add(button);
         toolBar.add(button);
-        toolBar.add(Box.createRigidArea(new Dimension(0, 4)));
+        toolBar.add(Box.createRigidArea(new Dimension(0, 8)));
     }
 
     // =========================================================================
@@ -637,9 +639,9 @@ public class MainFrame extends JFrame {
 
         private ToolButton(ToolType toolType) {
             this.toolType = toolType;
-            setPreferredSize(new Dimension(34, 34));
-            setMinimumSize(new Dimension(34, 34));
-            setMaximumSize(new Dimension(34, 34));
+            setPreferredSize(new Dimension(64, 54));
+            setMinimumSize(new Dimension(64, 54));
+            setMaximumSize(new Dimension(64, 54));
             setAlignmentX(LEFT_ALIGNMENT);
             setToolTipText(toolType.getDisplayName());
             setText("");
@@ -652,61 +654,81 @@ public class MainFrame extends JFrame {
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(isSelected() ? TOOL_SELECTED : TOOL_BG);
-            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+            g2.setColor(isSelected() ? TOOL_SELECTED : new Color(255, 255, 255, 18));
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 7, 7);
             if (isSelected()) {
                 g2.setColor(ACCENT);
-                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 6, 6);
+            } else {
+                g2.setColor(new Color(255, 255, 255, 45));
             }
-            g2.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 7, 7);
+
+            g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             g2.setColor(isSelected() ? new Color(83, 171, 255) : TEXT);
             paintToolIcon(g2, toolType);
+            paintToolLabel(g2);
             g2.dispose();
         }
 
         private void paintToolIcon(Graphics2D g2, ToolType type) {
             int cx = getWidth() / 2;
-            int cy = getHeight() / 2;
+            int cy = 21;
             if (type == ToolType.SELECT) {
                 Polygon p = new Polygon();
-                p.addPoint(cx - 6, cy - 10);
-                p.addPoint(cx - 5, cy + 9);
+                p.addPoint(cx - 7, cy - 11);
+                p.addPoint(cx - 6, cy + 10);
                 p.addPoint(cx, cy + 4);
-                p.addPoint(cx + 5, cy + 10);
-                p.addPoint(cx + 8, cy + 8);
-                p.addPoint(cx + 3, cy + 1);
-                p.addPoint(cx + 10, cy + 1);
+                p.addPoint(cx + 6, cy + 11);
+                p.addPoint(cx + 9, cy + 9);
+                p.addPoint(cx + 4, cy + 2);
+                p.addPoint(cx + 11, cy + 2);
                 g2.drawPolygon(p);
             } else if (type == ToolType.RECTANGLE) {
-                g2.drawRect(cx - 10, cy - 8, 20, 16);
+                g2.drawRect(cx - 12, cy - 9, 24, 18);
             } else if (type == ToolType.CIRCLE) {
-                g2.drawOval(cx - 10, cy - 10, 20, 20);
+                g2.drawOval(cx - 12, cy - 12, 24, 24);
             } else if (type == ToolType.TRIANGLE) {
                 Polygon p = new Polygon();
-                p.addPoint(cx, cy - 11);
-                p.addPoint(cx - 10, cy + 9);
-                p.addPoint(cx + 10, cy + 9);
+                p.addPoint(cx, cy - 13);
+                p.addPoint(cx - 12, cy + 11);
+                p.addPoint(cx + 12, cy + 11);
                 g2.drawPolygon(p);
             } else if (type == ToolType.PARALLELOGRAM) {
                 Polygon p = new Polygon();
-                p.addPoint(cx - 5, cy - 9);
-                p.addPoint(cx + 11, cy - 9);
-                p.addPoint(cx + 5, cy + 9);
-                p.addPoint(cx - 11, cy + 9);
+                p.addPoint(cx - 6, cy - 11);
+                p.addPoint(cx + 13, cy - 11);
+                p.addPoint(cx + 6, cy + 11);
+                p.addPoint(cx - 13, cy + 11);
                 g2.drawPolygon(p);
             } else if (type == ToolType.STAR) {
                 Polygon p = new Polygon();
                 for (int i = 0; i < 10; i++) {
                     double angle = -Math.PI / 2.0 + i * Math.PI / 5.0;
-                    double radius = (i % 2 == 0) ? 11 : 5;
+                    double radius = (i % 2 == 0) ? 13 : 6;
                     p.addPoint(
                             (int) Math.round(cx + Math.cos(angle) * radius),
                             (int) Math.round(cy + Math.sin(angle) * radius));
                 }
                 g2.drawPolygon(p);
             } else if (type == ToolType.LINE) {
-                g2.drawLine(cx - 10, cy + 9, cx + 10, cy - 9);
+                g2.drawLine(cx - 12, cy + 11, cx + 12, cy - 11);
             }
+        }
+
+        private void paintToolLabel(Graphics2D g2) {
+            String label = toolType.getDisplayName();
+            g2.setFont(g2.getFont().deriveFont(Font.PLAIN, 9f));
+            FontMetrics metrics = g2.getFontMetrics();
+            int maxWidth = getWidth() - 8;
+            while (metrics.stringWidth(label) > maxWidth && g2.getFont().getSize2D() > 7f) {
+                g2.setFont(g2.getFont().deriveFont(g2.getFont().getSize2D() - 0.5f));
+                metrics = g2.getFontMetrics();
+            }
+
+            int x = (getWidth() - metrics.stringWidth(label)) / 2;
+            int y = getHeight() - 9;
+            g2.setColor(isSelected() ? TEXT : new Color(210, 216, 222));
+            g2.drawString(label, x, y);
         }
     }
 }
