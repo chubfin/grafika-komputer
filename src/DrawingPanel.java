@@ -19,15 +19,19 @@ import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.RoundRectangle2D;
 import java.util.List;
 import java.util.function.Consumer;
 import javax.swing.JColorChooser;
 
 public class DrawingPanel extends JPanel {
 
-    private static final Color CANVAS_BG = new Color(27, 30, 33);
-    private static final Color GRID_MINOR = new Color(64, 68, 72);
-    private static final Color GRID_MAJOR = new Color(83, 88, 94);
+    private static final Color WORKSPACE_BG = new Color(27, 30, 33);
+    private static final Color CANVAS_BG = Color.WHITE;
+    private static final Color CANVAS_BORDER = new Color(170, 176, 184);
+    private static final int CANVAS_MAX_WIDTH = 920;
+    private static final int CANVAS_MARGIN = 24;
+    private static final int CANVAS_ARC = 18;
     private static final Color SELECTION_BLUE = new Color(55, 142, 219);
     private static final Color SELECTION_FILL = new Color(55, 142, 219, 28);
 
@@ -75,7 +79,7 @@ public class DrawingPanel extends JPanel {
         // Inisialisasi HistoryManager - Anggota 4
         this.historyManager = new HistoryManager();
 
-        setBackground(CANVAS_BG);
+        setBackground(WORKSPACE_BG);
         setFocusable(true);
         setupMouseHandlers();
         setupKeyboardHandlers();
@@ -156,7 +160,11 @@ public class DrawingPanel extends JPanel {
 
         Graphics2D g2d = (Graphics2D) g.create();
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        drawGrid(g2d);
+        Rectangle canvasBounds = getCanvasBounds();
+        Shape canvasShape = getCanvasShape(canvasBounds);
+        drawCanvasSurface(g2d, canvasBounds);
+        Shape oldClip = g2d.getClip();
+        g2d.setClip(canvasShape);
 
         // Gambar semua shape (GroupObject sudah digambar via member-nya)
         for (ShapeObject shapeObject : shapeManager.getShapes()) {
@@ -180,22 +188,41 @@ public class DrawingPanel extends JPanel {
             drawRubberBand(g2d);
         }
 
+        g2d.setClip(oldClip);
         g2d.dispose();
     }
 
-    private void drawGrid(Graphics2D g2d) {
-        int minor = 12;
-        int major = minor * 5;
-        g2d.setStroke(new BasicStroke(1f));
+    private Rectangle getCanvasBounds() {
+        int width = Math.min(CANVAS_MAX_WIDTH, Math.max(1, getWidth() - CANVAS_MARGIN * 2));
+        int height = Math.max(1, getHeight() - CANVAS_MARGIN * 2);
+        int x = Math.max(CANVAS_MARGIN, (getWidth() - width) / 2);
+        return new Rectangle(x, CANVAS_MARGIN, width, height);
+    }
 
-        for (int x = 0; x < getWidth(); x += minor) {
-            g2d.setColor(x % major == 0 ? GRID_MAJOR : GRID_MINOR);
-            g2d.drawLine(x, 0, x, getHeight());
-        }
-        for (int y = 0; y < getHeight(); y += minor) {
-            g2d.setColor(y % major == 0 ? GRID_MAJOR : GRID_MINOR);
-            g2d.drawLine(0, y, getWidth(), y);
-        }
+    private void drawCanvasSurface(Graphics2D g2d, Rectangle canvasBounds) {
+        Shape canvasShape = getCanvasShape(canvasBounds);
+        g2d.setColor(CANVAS_BG);
+        g2d.fill(canvasShape);
+        g2d.setColor(CANVAS_BORDER);
+        g2d.draw(canvasShape);
+    }
+
+    private Shape getCanvasShape(Rectangle bounds) {
+        return new RoundRectangle2D.Double(
+                bounds.x, bounds.y,
+                bounds.width, bounds.height,
+                CANVAS_ARC, CANVAS_ARC);
+    }
+
+    private boolean isInCanvas(Point point) {
+        return getCanvasShape(getCanvasBounds()).contains(point);
+    }
+
+    private Point clampToCanvas(Point point) {
+        Rectangle bounds = getCanvasBounds();
+        int x = Math.max(bounds.x, Math.min(bounds.x + bounds.width, point.x));
+        int y = Math.max(bounds.y, Math.min(bounds.y + bounds.height, point.y));
+        return new Point(x, y);
     }
 
     /** Gambar group: gambar semua member, lalu outline bounding box group. */
@@ -492,9 +519,22 @@ public class DrawingPanel extends JPanel {
             @Override
             public void mousePressed(MouseEvent e) {
                 requestFocusInWindow();
-                dragStartPoint = e.getPoint();
-                lastDragPoint = e.getPoint();
-                currentDragPoint = e.getPoint();
+                Point mousePoint = e.getPoint();
+                if (!isInCanvas(mousePoint)) {
+                    if (currentTool == ToolType.SELECT) {
+                        shapeManager.clearSelection();
+                        notifySelectionChanged();
+                        repaint();
+                    }
+                    dragStartPoint = null;
+                    lastDragPoint = null;
+                    currentDragPoint = null;
+                    return;
+                }
+
+                dragStartPoint = mousePoint;
+                lastDragPoint = mousePoint;
+                currentDragPoint = mousePoint;
 
                 if (currentTool == ToolType.SELECT) {
                     boolean ctrl = (e.getModifiersEx() & InputEvent.CTRL_DOWN_MASK) != 0;
@@ -546,27 +586,30 @@ public class DrawingPanel extends JPanel {
 
             @Override
             public void mouseDragged(MouseEvent e) {
-                currentDragPoint = e.getPoint();
+                if (dragStartPoint == null) {
+                    return;
+                }
+                currentDragPoint = clampToCanvas(e.getPoint());
 
                 if (currentTool == ToolType.SELECT) {
                     if (draggingSelectedShape) {
                         // Gerakkan semua shape yang terpilih sekaligus
-                        int deltaX = e.getX() - lastDragPoint.x;
-                        int deltaY = e.getY() - lastDragPoint.y;
+                        int deltaX = currentDragPoint.x - lastDragPoint.x;
+                        int deltaY = currentDragPoint.y - lastDragPoint.y;
 
                         List<ShapeObject> selected = shapeManager.getSelectedShapes();
                         for (ShapeObject s : selected) {
                             s.moveBy(deltaX, deltaY);
                         }
-                        lastDragPoint = e.getPoint();
+                        lastDragPoint = currentDragPoint;
                         notifySelectionChanged();
                     }
                     // Rubber-band: update seleksi real-time
                     if (rubberBanding) {
                         int rx = dragStartPoint.x;
                         int ry = dragStartPoint.y;
-                        int rw = e.getX() - rx;
-                        int rh = e.getY() - ry;
+                        int rw = currentDragPoint.x - rx;
+                        int rh = currentDragPoint.y - ry;
                         shapeManager.selectShapesInRect(rx, ry, rw, rh);
                         notifySelectionChanged();
                     }
@@ -576,6 +619,7 @@ public class DrawingPanel extends JPanel {
 
             @Override
             public void mouseReleased(MouseEvent e) {
+                Point releasePoint = clampToCanvas(e.getPoint());
                 if (currentTool == ToolType.SELECT) {
                     draggingSelectedShape = false;
                     rubberBanding = false;
@@ -585,7 +629,7 @@ public class DrawingPanel extends JPanel {
                     return;
                 }
 
-                createShapeFromDrag(e.getPoint());
+                createShapeFromDrag(releasePoint);
                 dragStartPoint = null;
                 lastDragPoint = null;
                 currentDragPoint = null;
