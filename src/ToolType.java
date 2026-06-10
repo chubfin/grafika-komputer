@@ -3,6 +3,8 @@ public enum ToolType {
     RECTANGLE("Rectangle"),
     CIRCLE("Circle"),
     TRIANGLE("Triangle"),
+    PARALLELOGRAM("Jajargenjang"),
+    STAR("Bintang"),
     LINE("Line");
 
     private final String displayName;

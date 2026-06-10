@@ -28,6 +28,8 @@ import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.JToggleButton;
 import javax.swing.UIManager;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 public class MainFrame extends JFrame {
@@ -450,16 +452,19 @@ public class MainFrame extends JFrame {
     // =========================================================================
 
     private JPanel createToolBar() {
-        JPanel toolBar = new JPanel(new GridLayout(5, 1, 0, 8));
+        JPanel toolBar = new JPanel();
+        toolBar.setLayout(new BoxLayout(toolBar, BoxLayout.Y_AXIS));
         toolBar.setBackground(TOOL_BG);
-        toolBar.setBorder(BorderFactory.createEmptyBorder(22, 6, 22, 6));
-        toolBar.setPreferredSize(new Dimension(56, 0));
+        toolBar.setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
+        toolBar.setPreferredSize(new Dimension(44, 0));
 
         ButtonGroup toolGroup = new ButtonGroup();
         addToolButton(toolBar, toolGroup, ToolType.SELECT, true);
         addToolButton(toolBar, toolGroup, ToolType.RECTANGLE, false);
         addToolButton(toolBar, toolGroup, ToolType.CIRCLE, false);
         addToolButton(toolBar, toolGroup, ToolType.TRIANGLE, false);
+        addToolButton(toolBar, toolGroup, ToolType.PARALLELOGRAM, false);
+        addToolButton(toolBar, toolGroup, ToolType.STAR, false);
         addToolButton(toolBar, toolGroup, ToolType.LINE, false);
 
         return toolBar;
@@ -490,6 +495,7 @@ public class MainFrame extends JFrame {
 
         toolGroup.add(button);
         toolBar.add(button);
+        toolBar.add(Box.createRigidArea(new Dimension(0, 4)));
     }
 
     // =========================================================================
@@ -631,9 +637,10 @@ public class MainFrame extends JFrame {
 
         private ToolButton(ToolType toolType) {
             this.toolType = toolType;
-            setPreferredSize(new Dimension(44, 44));
-            setMinimumSize(new Dimension(44, 44));
-            setMaximumSize(new Dimension(44, 44));
+            setPreferredSize(new Dimension(34, 34));
+            setMinimumSize(new Dimension(34, 34));
+            setMaximumSize(new Dimension(34, 34));
+            setAlignmentX(LEFT_ALIGNMENT);
             setToolTipText(toolType.getDisplayName());
             setText("");
             setFocusPainted(false);
@@ -662,26 +669,43 @@ public class MainFrame extends JFrame {
             int cy = getHeight() / 2;
             if (type == ToolType.SELECT) {
                 Polygon p = new Polygon();
-                p.addPoint(cx - 8, cy - 13);
-                p.addPoint(cx - 7, cy + 12);
-                p.addPoint(cx, cy + 5);
-                p.addPoint(cx + 7, cy + 13);
-                p.addPoint(cx + 10, cy + 10);
-                p.addPoint(cx + 4, cy + 2);
-                p.addPoint(cx + 13, cy + 2);
+                p.addPoint(cx - 6, cy - 10);
+                p.addPoint(cx - 5, cy + 9);
+                p.addPoint(cx, cy + 4);
+                p.addPoint(cx + 5, cy + 10);
+                p.addPoint(cx + 8, cy + 8);
+                p.addPoint(cx + 3, cy + 1);
+                p.addPoint(cx + 10, cy + 1);
                 g2.drawPolygon(p);
             } else if (type == ToolType.RECTANGLE) {
-                g2.drawRect(cx - 13, cy - 10, 26, 20);
+                g2.drawRect(cx - 10, cy - 8, 20, 16);
             } else if (type == ToolType.CIRCLE) {
-                g2.drawOval(cx - 13, cy - 13, 26, 26);
+                g2.drawOval(cx - 10, cy - 10, 20, 20);
             } else if (type == ToolType.TRIANGLE) {
                 Polygon p = new Polygon();
-                p.addPoint(cx, cy - 14);
-                p.addPoint(cx - 13, cy + 12);
-                p.addPoint(cx + 13, cy + 12);
+                p.addPoint(cx, cy - 11);
+                p.addPoint(cx - 10, cy + 9);
+                p.addPoint(cx + 10, cy + 9);
+                g2.drawPolygon(p);
+            } else if (type == ToolType.PARALLELOGRAM) {
+                Polygon p = new Polygon();
+                p.addPoint(cx - 5, cy - 9);
+                p.addPoint(cx + 11, cy - 9);
+                p.addPoint(cx + 5, cy + 9);
+                p.addPoint(cx - 11, cy + 9);
+                g2.drawPolygon(p);
+            } else if (type == ToolType.STAR) {
+                Polygon p = new Polygon();
+                for (int i = 0; i < 10; i++) {
+                    double angle = -Math.PI / 2.0 + i * Math.PI / 5.0;
+                    double radius = (i % 2 == 0) ? 11 : 5;
+                    p.addPoint(
+                            (int) Math.round(cx + Math.cos(angle) * radius),
+                            (int) Math.round(cy + Math.sin(angle) * radius));
+                }
                 g2.drawPolygon(p);
             } else if (type == ToolType.LINE) {
-                g2.drawLine(cx - 13, cy + 12, cx + 13, cy - 12);
+                g2.drawLine(cx - 10, cy + 9, cx + 10, cy - 9);
             }
         }
     }

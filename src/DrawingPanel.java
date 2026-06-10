@@ -453,11 +453,38 @@ public class DrawingPanel extends JPanel {
                 triangle.addPoint(0, height);
                 triangle.addPoint(width, height);
                 return triangle;
+            case PARALLELOGRAM:
+                Polygon parallelogram = new Polygon();
+                int offset = Math.max(1, Math.abs(width) / 4);
+                parallelogram.addPoint(offset, 0);
+                parallelogram.addPoint(width, 0);
+                parallelogram.addPoint(width - offset, height);
+                parallelogram.addPoint(0, height);
+                return parallelogram;
+            case STAR:
+                return createStar(width, height);
             case LINE:
                 return new Line2D.Double(0, 0, width, height);
             default:
                 return new Rectangle(0, 0, width, height);
         }
+    }
+
+    private Shape createStar(int width, int height) {
+        Polygon star = new Polygon();
+        double centerX = width / 2.0;
+        double centerY = height / 2.0;
+        double outerRadius = Math.min(Math.abs(width), Math.abs(height)) / 2.0;
+        double innerRadius = outerRadius * 0.45;
+
+        for (int i = 0; i < 10; i++) {
+            double angle = -Math.PI / 2.0 + i * Math.PI / 5.0;
+            double radius = (i % 2 == 0) ? outerRadius : innerRadius;
+            int px = (int) Math.round(centerX + Math.cos(angle) * radius);
+            int py = (int) Math.round(centerY + Math.sin(angle) * radius);
+            star.addPoint(px, py);
+        }
+        return star;
     }
 
     private void setupMouseHandlers() {
