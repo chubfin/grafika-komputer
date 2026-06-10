@@ -13,6 +13,7 @@ import java.awt.Polygon;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.imageio.ImageIO;
@@ -30,6 +31,9 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
+import javax.swing.JSpinner;
+import javax.swing.JComboBox;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.UIManager;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -57,7 +61,7 @@ public class MainFrame extends JFrame {
 
         shapeManager = new ShapeManager();
         drawingPanel = new DrawingPanel(shapeManager, this::onSelectionChanged);
-        propertyPanel = new PropertyPanel(() -> drawingPanel.repaint());
+        propertyPanel = new PropertyPanel(shapeManager, drawingPanel, () -> drawingPanel.repaint());
         stylePanel = new StylePanel(shapeManager, drawingPanel,
                 () -> {
                     drawingPanel.repaint();
@@ -309,10 +313,7 @@ public class MainFrame extends JFrame {
         Color chosen = JColorChooser.showDialog(this, "Warna Area Irisan", initialColor);
         if (chosen == null) return;
 
-        // Distribusikan warna ke kedua shape sehingga rata-ratanya = chosen
-        // Cara sederhana: set kedua shape ke warna tersebut
-        selected.get(0).setFillColor(chosen);
-        selected.get(1).setFillColor(chosen);
+        shapeManager.setIntersectionColor(selected.get(0), selected.get(1), chosen);
         drawingPanel.repaint();
         statusLabel.setText("Warna irisan diperbarui");
     }
@@ -334,40 +335,33 @@ public class MainFrame extends JFrame {
     JMenu transformMenu = new JMenu("Transform");
 
     JMenuItem rotateItem = new JMenuItem("Rotate +15°");
-    rotateItem.addActionListener(e -> applyTransformToSelected(
-            shape -> shape.setRotation(shape.getRotation() + 15)));
+    rotateItem.addActionListener(e -> rotateSelected(15));
 
     JMenuItem rotateCCWItem = new JMenuItem("Rotate -15°");
-    rotateCCWItem.addActionListener(e -> applyTransformToSelected(
-            shape -> shape.setRotation(shape.getRotation() - 15)));
+    rotateCCWItem.addActionListener(e -> rotateSelected(-15));
 
     JMenuItem scaleUpItem = new JMenuItem("Scale Up (+10%)");
-    scaleUpItem.addActionListener(e -> applyTransformToSelected(shape -> {
-        shape.setScaleX(shape.getScaleX() * 1.1);
-        shape.setScaleY(shape.getScaleY() * 1.1);
-    }));
+    scaleUpItem.addActionListener(e -> scaleSelected(1.1));
 
     JMenuItem scaleDownItem = new JMenuItem("Scale Down (-10%)");
-    scaleDownItem.addActionListener(e -> applyTransformToSelected(shape -> {
-        shape.setScaleX(shape.getScaleX() / 1.1);
-        shape.setScaleY(shape.getScaleY() / 1.1);
-    }));
+    scaleDownItem.addActionListener(e -> scaleSelected(1.0 / 1.1));
 
     // Reflection Horizontal - bayangan di samping kiri/kanan
     JMenuItem reflectHorizontalItem = new JMenuItem("Reflect Horizontal (Kiri/Kanan)");
-    reflectHorizontalItem.addActionListener(e -> applyTransformToSelected(shape -> {
-        shape.setReflected(true);
-        shape.setReflectDirection(1);
-        // TIDAK mengubah line style objek asli
-    }));
+    reflectHorizontalItem.addActionListener(e -> reflectSelected(1));
 
     // Reflection Vertical - bayangan di bawah/atas
     JMenuItem reflectVerticalItem = new JMenuItem("Reflect Vertical (Atas/Bawah)");
-    reflectVerticalItem.addActionListener(e -> applyTransformToSelected(shape -> {
-        shape.setReflected(true);
-        shape.setReflectDirection(2);
-        // TIDAK mengubah line style objek asli
-    }));
+    reflectVerticalItem.addActionListener(e -> reflectSelected(2));
+
+    JMenuItem reflectLineItem = new JMenuItem("Draw Reflection Line");
+    reflectLineItem.addActionListener(e -> {
+        if (drawingPanel.beginReflectionLineMode()) {
+            statusLabel.setText("Drag garis refleksi di canvas");
+        } else {
+            statusLabel.setText("Pilih shape dulu sebelum menggambar garis refleksi");
+        }
+    });
 
     // Turn off reflection
     JMenuItem reflectOffItem = new JMenuItem("Turn Off Reflection");
@@ -396,6 +390,7 @@ public class MainFrame extends JFrame {
     transformMenu.addSeparator();
     transformMenu.add(reflectHorizontalItem);
     transformMenu.add(reflectVerticalItem);
+    transformMenu.add(reflectLineItem);
     transformMenu.add(reflectOffItem);
     transformMenu.addSeparator();
     transformMenu.add(resetItem);
@@ -412,6 +407,8 @@ public class MainFrame extends JFrame {
             statusLabel.setText("Pilih shape terlebih dahulu");
             return;
         }
+        List<ShapeObject> targets = getTransformTargets();
+        List<ShapeState> before = snapshotStates(targets);
         for (ShapeObject s : selected) {
             if (s instanceof GroupObject) {
                 for (ShapeObject member : ((GroupObject) s).getMembers()) {
@@ -421,9 +418,200 @@ public class MainFrame extends JFrame {
                 action.accept(s);
             }
         }
+        drawingPanel.getHistoryManager().recordCommand(
+                new ModifyShapesCommand(targets, before, snapshotStates(targets)));
         drawingPanel.repaint();
         int count = selected.size();
         statusLabel.setText("Transform diterapkan ke " + count + " shape");
+    }
+
+    private List<ShapeObject> getTransformTargets() {
+        List<ShapeObject> targets = new ArrayList<>();
+        for (ShapeObject selected : shapeManager.getSelectedShapes()) {
+            if (selected instanceof GroupObject) {
+                targets.addAll(((GroupObject) selected).getMembers());
+            } else {
+                targets.add(selected);
+            }
+        }
+        return targets;
+    }
+
+    private Rectangle getSelectionBounds(List<ShapeObject> targets) {
+        Rectangle bounds = null;
+        for (ShapeObject shape : targets) {
+            Rectangle b = shape.getTransformedShape().getBounds();
+            bounds = bounds == null ? b : bounds.union(b);
+        }
+        return bounds;
+    }
+
+    private List<ShapeState> snapshotStates(List<ShapeObject> shapes) {
+        List<ShapeState> states = new ArrayList<>();
+        for (ShapeObject shape : shapes) {
+            states.add(new ShapeState(shape));
+        }
+        return states;
+    }
+
+    private void rotateSelected(double degrees) {
+        List<ShapeObject> targets = getTransformTargets();
+        if (targets.isEmpty()) {
+            statusLabel.setText("Pilih shape terlebih dahulu");
+            return;
+        }
+        List<ShapeState> before = snapshotStates(targets);
+
+        if (targets.size() == 1) {
+            ShapeObject shape = targets.get(0);
+            shape.setRotation(shape.getRotation() + degrees);
+        } else {
+            Rectangle bounds = getSelectionBounds(targets);
+            double pivotX = bounds.getCenterX();
+            double pivotY = bounds.getCenterY();
+            double radians = Math.toRadians(degrees);
+            for (ShapeObject shape : targets) {
+                Rectangle b = shape.getTransformedShape().getBounds();
+                double cx = b.getCenterX();
+                double cy = b.getCenterY();
+                double dx = cx - pivotX;
+                double dy = cy - pivotY;
+                double newCx = pivotX + dx * Math.cos(radians) - dy * Math.sin(radians);
+                double newCy = pivotY + dx * Math.sin(radians) + dy * Math.cos(radians);
+                shape.moveBy((int) Math.round(newCx - cx), (int) Math.round(newCy - cy));
+                shape.setRotation(shape.getRotation() + degrees);
+            }
+        }
+        drawingPanel.getHistoryManager().recordCommand(
+                new ModifyShapesCommand(targets, before, snapshotStates(targets)));
+        drawingPanel.repaint();
+        onSelectionChanged(shapeManager.getSelectedShape());
+        statusLabel.setText("Rotate " + degrees + " derajat diterapkan sebagai satu kesatuan");
+    }
+
+    private void scaleSelected(double factor) {
+        List<ShapeObject> targets = getTransformTargets();
+        if (targets.isEmpty()) {
+            statusLabel.setText("Pilih shape terlebih dahulu");
+            return;
+        }
+        List<ShapeState> before = snapshotStates(targets);
+
+        Rectangle bounds = getSelectionBounds(targets);
+        double pivotX = bounds.getCenterX();
+        double pivotY = bounds.getCenterY();
+        for (ShapeObject shape : targets) {
+            Rectangle b = shape.getTransformedShape().getBounds();
+            double cx = b.getCenterX();
+            double cy = b.getCenterY();
+            double newCx = pivotX + (cx - pivotX) * factor;
+            double newCy = pivotY + (cy - pivotY) * factor;
+            shape.moveBy((int) Math.round(newCx - cx), (int) Math.round(newCy - cy));
+            shape.setScaleX(shape.getScaleX() * factor);
+            shape.setScaleY(shape.getScaleY() * factor);
+        }
+        drawingPanel.getHistoryManager().recordCommand(
+                new ModifyShapesCommand(targets, before, snapshotStates(targets)));
+        drawingPanel.repaint();
+        onSelectionChanged(shapeManager.getSelectedShape());
+        statusLabel.setText("Scale diterapkan sebagai satu kesatuan");
+    }
+
+    private void reflectSelected(int direction) {
+        List<ShapeObject> targets = getTransformTargets();
+        if (targets.isEmpty()) {
+            statusLabel.setText("Pilih shape terlebih dahulu");
+            return;
+        }
+
+        List<ShapeState> before = snapshotStates(targets);
+        Rectangle bounds = getSelectionBounds(targets);
+        double axisX = direction == 1 ? bounds.getMaxX() : bounds.getCenterX();
+        double axisY = direction == 2 ? bounds.getMaxY() : bounds.getCenterY();
+        double angle = direction == 1 ? 90.0 : 0.0;
+        applyReflectionAxis(targets, direction, axisX, axisY, angle, before);
+        statusLabel.setText("Reflection diterapkan sebagai satu kesatuan");
+    }
+
+    private void showReflectionDialog() {
+        List<ShapeObject> targets = getTransformTargets();
+        if (targets.isEmpty()) {
+            statusLabel.setText("Pilih shape terlebih dahulu");
+            return;
+        }
+
+        Rectangle bounds = getSelectionBounds(targets);
+        JComboBox<String> axisCombo = new JComboBox<>(new String[]{
+                "Vertikal di kanan selection",
+                "Vertikal di tengah selection",
+                "Horizontal di bawah selection",
+                "Horizontal di tengah selection",
+                "Custom derajat dan titik"
+        });
+        JSpinner xSpinner = new JSpinner(new SpinnerNumberModel(bounds.getCenterX(), -9999.0, 9999.0, 1.0));
+        JSpinner ySpinner = new JSpinner(new SpinnerNumberModel(bounds.getCenterY(), -9999.0, 9999.0, 1.0));
+        JSpinner angleSpinner = new JSpinner(new SpinnerNumberModel(0.0, -360.0, 360.0, 1.0));
+
+        JPanel panel = new JPanel(new GridLayout(0, 2, 8, 6));
+        panel.add(new JLabel("Sumbu"));
+        panel.add(axisCombo);
+        panel.add(new JLabel("X garis"));
+        panel.add(xSpinner);
+        panel.add(new JLabel("Y garis"));
+        panel.add(ySpinner);
+        panel.add(new JLabel("Sudut garis (derajat)"));
+        panel.add(angleSpinner);
+
+        int result = JOptionPane.showConfirmDialog(
+                this, panel, "Reflection Detail", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
+
+        int selectedAxis = axisCombo.getSelectedIndex();
+        double axisX = ((Number) xSpinner.getValue()).doubleValue();
+        double axisY = ((Number) ySpinner.getValue()).doubleValue();
+        double angle = ((Number) angleSpinner.getValue()).doubleValue();
+        int direction = 3;
+
+        if (selectedAxis == 0) {
+            axisX = bounds.getMaxX();
+            axisY = bounds.getCenterY();
+            angle = 90.0;
+            direction = 1;
+        } else if (selectedAxis == 1) {
+            axisX = bounds.getCenterX();
+            axisY = bounds.getCenterY();
+            angle = 90.0;
+            direction = 1;
+        } else if (selectedAxis == 2) {
+            axisX = bounds.getCenterX();
+            axisY = bounds.getMaxY();
+            angle = 0.0;
+            direction = 2;
+        } else if (selectedAxis == 3) {
+            axisX = bounds.getCenterX();
+            axisY = bounds.getCenterY();
+            angle = 0.0;
+            direction = 2;
+        }
+
+        applyReflectionAxis(targets, direction, axisX, axisY, angle, snapshotStates(targets));
+        statusLabel.setText("Reflection detail: axis " + angle + " derajat");
+    }
+
+    private void applyReflectionAxis(List<ShapeObject> targets, int direction,
+                                     double axisX, double axisY, double angle,
+                                     List<ShapeState> before) {
+        for (ShapeObject shape : targets) {
+            shape.setReflected(true);
+            shape.setReflectDirection(direction);
+            shape.setReflectionAxisLine(axisX, axisY, angle);
+        }
+        drawingPanel.getHistoryManager().recordCommand(
+                new ModifyShapesCommand(targets, before, snapshotStates(targets)));
+        drawingPanel.repaint();
+        onSelectionChanged(shapeManager.getSelectedShape());
     }
 
     // =========================================================================
@@ -706,7 +894,7 @@ public class MainFrame extends JFrame {
             statusLabel.setText("Selected: " + label);
         } else {
             // Multi-selection: tampilkan info jumlah
-            propertyPanel.showShape(null);
+            propertyPanel.showShapes(selected);
             statusLabel.setText("Selected: " + selected.size() + " shapes");
         }
     }

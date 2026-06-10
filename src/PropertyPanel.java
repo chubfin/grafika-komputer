@@ -16,6 +16,9 @@ import java.awt.Dimension;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FlowLayout;
+import java.awt.Rectangle;
+import java.util.ArrayList;
+import java.util.List;
 
 public class PropertyPanel extends JPanel {
 
@@ -47,12 +50,19 @@ public class PropertyPanel extends JPanel {
     private final JComboBox<AnimationType> animTypeComboBox;
 
     private ShapeObject currentShape;
+    private final List<ShapeObject> currentShapes;
+    private final ShapeManager shapeManager;
+    private final DrawingPanel drawingPanel;
+    private double multiRotationValue;
     private Runnable onChangeCallback;
 
     private boolean isUpdating = false;
 
-    public PropertyPanel(Runnable onChangeCallback) {
+    public PropertyPanel(ShapeManager shapeManager, DrawingPanel drawingPanel, Runnable onChangeCallback) {
+        this.shapeManager = shapeManager;
+        this.drawingPanel = drawingPanel;
         this.onChangeCallback = onChangeCallback;
+        this.currentShapes = new ArrayList<>();
 
         setLayout(new BorderLayout());
         setBackground(PANEL_BG);
@@ -155,7 +165,15 @@ public class PropertyPanel extends JPanel {
 
     private void setupListeners() {
     ChangeListener listener = e -> {
-        if (currentShape == null || isUpdating) return;
+        if (isUpdating) return;
+        if (!currentShapes.isEmpty()) {
+            applyMultiShapePanelChange(e.getSource());
+            return;
+        }
+        if (currentShape == null) return;
+        List<ShapeObject> changed = new ArrayList<>();
+        changed.add(currentShape);
+        List<ShapeState> before = snapshotStates(changed);
         currentShape.setX(((Number) xSpinner.getValue()).intValue());
         currentShape.setY(((Number) ySpinner.getValue()).intValue());
         currentShape.setRotation(((Number) rotationSpinner.getValue()).doubleValue());
@@ -163,6 +181,8 @@ public class PropertyPanel extends JPanel {
         currentShape.setScaleY(((Number) scaleYSpinner.getValue()).doubleValue());
         currentShape.setSkewX(((Number) skewXSpinner.getValue()).doubleValue());
         currentShape.setSkewY(((Number) skewYSpinner.getValue()).doubleValue());
+        drawingPanel.getHistoryManager().recordCommand(
+                new ModifyShapesCommand(changed, before, snapshotStates(changed)));
         onChangeCallback.run();
     };
 
@@ -176,7 +196,16 @@ public class PropertyPanel extends JPanel {
 
     // Reflection listener - TIDAK mengubah line style objek asli
     java.awt.event.ActionListener reflectionListener = e -> {
-        if (isUpdating || currentShape == null) return;
+        if (isUpdating) return;
+        if (!currentShapes.isEmpty()) {
+            applyMultiShapeReflection();
+            return;
+        }
+        if (currentShape == null) return;
+
+        List<ShapeObject> changed = new ArrayList<>();
+        changed.add(currentShape);
+        List<ShapeState> before = snapshotStates(changed);
         
         if (reflectNoneRadio.isSelected()) {
             currentShape.setReflected(false);
@@ -188,6 +217,8 @@ public class PropertyPanel extends JPanel {
             currentShape.setReflected(true);
             currentShape.setReflectDirection(2);
         }
+        drawingPanel.getHistoryManager().recordCommand(
+                new ModifyShapesCommand(changed, before, snapshotStates(changed)));
         onChangeCallback.run();
     };
     reflectNoneRadio.addActionListener(reflectionListener);
@@ -195,8 +226,25 @@ public class PropertyPanel extends JPanel {
     reflectVerticalRadio.addActionListener(reflectionListener);
 
     animTypeComboBox.addActionListener(e -> {
-        if (isUpdating || currentShape == null) return;
-        currentShape.setAnimationType((AnimationType) animTypeComboBox.getSelectedItem());
+        if (isUpdating) return;
+        AnimationType selectedType = (AnimationType) animTypeComboBox.getSelectedItem();
+        if (!currentShapes.isEmpty()) {
+            List<ShapeState> before = snapshotStates(currentShapes);
+            for (ShapeObject shape : currentShapes) {
+                shape.setAnimationType(selectedType);
+            }
+            drawingPanel.getHistoryManager().recordCommand(
+                    new ModifyShapesCommand(currentShapes, before, snapshotStates(currentShapes)));
+            onChangeCallback.run();
+            return;
+        }
+        if (currentShape == null) return;
+        List<ShapeObject> changed = new ArrayList<>();
+        changed.add(currentShape);
+        List<ShapeState> before = snapshotStates(changed);
+        currentShape.setAnimationType(selectedType);
+        drawingPanel.getHistoryManager().recordCommand(
+                new ModifyShapesCommand(changed, before, snapshotStates(changed)));
         onChangeCallback.run();
     });
 }
@@ -204,6 +252,7 @@ public class PropertyPanel extends JPanel {
 public void showShape(ShapeObject shape) {
     isUpdating = true;
     currentShape = shape;
+    currentShapes.clear();
 
     if (shape == null) {
         xSpinner.setValue(0);
@@ -273,6 +322,141 @@ public void showShape(ShapeObject shape) {
         }
     }
     isUpdating = false;
+}
+
+public void showShapes(List<ShapeObject> shapes) {
+    isUpdating = true;
+    currentShape = null;
+    currentShapes.clear();
+    multiRotationValue = 0.0;
+    for (ShapeObject shape : shapes) {
+        if (shape instanceof GroupObject) {
+            currentShapes.addAll(((GroupObject) shape).getMembers());
+        } else {
+            currentShapes.add(shape);
+        }
+    }
+
+    Rectangle bounds = getShapesBounds(currentShapes);
+    xSpinner.setValue(bounds.x);
+    ySpinner.setValue(bounds.y);
+    rotationSpinner.setValue(0.0);
+    scaleXSpinner.setValue(1.0);
+    scaleYSpinner.setValue(1.0);
+    skewXSpinner.setValue(0.0);
+    skewYSpinner.setValue(0.0);
+
+    typeValue.setText("Multi (" + currentShapes.size() + ")");
+    widthValue.setText(String.valueOf(bounds.width));
+    heightValue.setText(String.valueOf(bounds.height));
+
+    reflectNoneRadio.setSelected(true);
+    animTypeComboBox.setSelectedItem(AnimationType.NONE);
+
+    xSpinner.setEnabled(true);
+    ySpinner.setEnabled(true);
+    rotationSpinner.setEnabled(true);
+    scaleXSpinner.setEnabled(true);
+    scaleYSpinner.setEnabled(true);
+    skewXSpinner.setEnabled(true);
+    skewYSpinner.setEnabled(true);
+    reflectNoneRadio.setEnabled(true);
+    reflectHorizontalRadio.setEnabled(true);
+    reflectVerticalRadio.setEnabled(true);
+    animTypeComboBox.setEnabled(true);
+    isUpdating = false;
+}
+
+private void applyMultiShapePanelChange(Object source) {
+    List<ShapeState> before = snapshotStates(currentShapes);
+    Rectangle bounds = getShapesBounds(currentShapes);
+    int deltaX = ((Number) xSpinner.getValue()).intValue() - bounds.x;
+    int deltaY = ((Number) ySpinner.getValue()).intValue() - bounds.y;
+
+    if (source == rotationSpinner) {
+        double nextRotation = ((Number) rotationSpinner.getValue()).doubleValue();
+        double deltaRotation = nextRotation - multiRotationValue;
+        rotateShapesAsGroup(currentShapes, bounds, deltaRotation);
+        multiRotationValue = nextRotation;
+    } else {
+        for (ShapeObject shape : currentShapes) {
+            if (source == xSpinner || source == ySpinner) {
+            shape.moveBy(deltaX, deltaY);
+            } else if (source == scaleXSpinner) {
+                shape.setScaleX(((Number) scaleXSpinner.getValue()).doubleValue());
+            } else if (source == scaleYSpinner) {
+                shape.setScaleY(((Number) scaleYSpinner.getValue()).doubleValue());
+            } else if (source == skewXSpinner) {
+                shape.setSkewX(((Number) skewXSpinner.getValue()).doubleValue());
+            } else if (source == skewYSpinner) {
+                shape.setSkewY(((Number) skewYSpinner.getValue()).doubleValue());
+            }
+        }
+    }
+    drawingPanel.getHistoryManager().recordCommand(
+            new ModifyShapesCommand(currentShapes, before, snapshotStates(currentShapes)));
+    onChangeCallback.run();
+}
+
+private void rotateShapesAsGroup(List<ShapeObject> shapes, Rectangle bounds, double degrees) {
+    double pivotX = bounds.getCenterX();
+    double pivotY = bounds.getCenterY();
+    double radians = Math.toRadians(degrees);
+
+    for (ShapeObject shape : shapes) {
+        Rectangle shapeBounds = shape.getTransformedShape().getBounds();
+        double cx = shapeBounds.getCenterX();
+        double cy = shapeBounds.getCenterY();
+        double dx = cx - pivotX;
+        double dy = cy - pivotY;
+        double newCx = pivotX + dx * Math.cos(radians) - dy * Math.sin(radians);
+        double newCy = pivotY + dx * Math.sin(radians) + dy * Math.cos(radians);
+        shape.moveBy((int) Math.round(newCx - cx), (int) Math.round(newCy - cy));
+        shape.setRotation(shape.getRotation() + degrees);
+    }
+}
+
+private void applyMultiShapeReflection() {
+    List<ShapeState> before = snapshotStates(currentShapes);
+    Rectangle bounds = getShapesBounds(currentShapes);
+
+    if (reflectNoneRadio.isSelected()) {
+        for (ShapeObject shape : currentShapes) {
+            shape.setReflected(false);
+            shape.setReflectDirection(0);
+        }
+    } else {
+        int direction = reflectHorizontalRadio.isSelected() ? 1 : 2;
+        double axisX = direction == 1 ? bounds.getMaxX() : bounds.getCenterX();
+        double axisY = direction == 2 ? bounds.getMaxY() : bounds.getCenterY();
+        double angle = direction == 1 ? 90.0 : 0.0;
+        for (ShapeObject shape : currentShapes) {
+            shape.setReflected(true);
+            shape.setReflectDirection(direction);
+            shape.setReflectionAxisLine(axisX, axisY, angle);
+        }
+    }
+
+    drawingPanel.getHistoryManager().recordCommand(
+            new ModifyShapesCommand(currentShapes, before, snapshotStates(currentShapes)));
+    onChangeCallback.run();
+}
+
+private Rectangle getShapesBounds(List<ShapeObject> shapes) {
+    Rectangle bounds = null;
+    for (ShapeObject shape : shapes) {
+        Rectangle b = shape.getTransformedShape().getBounds();
+        bounds = bounds == null ? b : bounds.union(b);
+    }
+    return bounds != null ? bounds : new Rectangle(0, 0, 0, 0);
+}
+
+private List<ShapeState> snapshotStates(List<ShapeObject> shapes) {
+    List<ShapeState> states = new ArrayList<>();
+    for (ShapeObject shape : shapes) {
+        states.add(new ShapeState(shape));
+    }
+    return states;
 }
 
     // -------------------------------------------------------------------------

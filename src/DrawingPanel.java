@@ -21,6 +21,9 @@ import java.awt.geom.Line2D;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.RoundRectangle2D;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Consumer;
 import javax.swing.JColorChooser;
 
@@ -56,6 +59,10 @@ public class DrawingPanel extends JPanel {
     private Point lastDragPoint;
     private Point currentDragPoint;
     private boolean draggingSelectedShape;
+    private boolean drawingReflectionLine;
+    private boolean reflectionLineMode;
+    private List<ShapeObject> dragHistoryShapes;
+    private List<ShapeState> dragBeforeStates;
 
     // -------------------------------------------------------------------------
     // Multi-Selection support - Anggota 4
@@ -79,6 +86,8 @@ public class DrawingPanel extends JPanel {
         this.currentStrokeWidth = 2.0f;
         this.currentLineStyle = LineStyle.SOLID;
         this.draggingSelectedShape = false;
+        this.drawingReflectionLine = false;
+        this.reflectionLineMode = false;
 
         // Inisialisasi HistoryManager - Anggota 4
         this.historyManager = new HistoryManager();
@@ -100,6 +109,18 @@ public class DrawingPanel extends JPanel {
 
     public void setCurrentTool(ToolType tool) {
         currentTool = tool;
+    }
+
+    public boolean beginReflectionLineMode() {
+        if (shapeManager.getSelectedShapes().isEmpty()) {
+            return false;
+        }
+        currentTool = ToolType.SELECT;
+        reflectionLineMode = true;
+        draggingSelectedShape = false;
+        rubberBanding = false;
+        setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.CROSSHAIR_CURSOR));
+        return true;
     }
 
     public Color getCurrentFillColor() {
@@ -183,8 +204,11 @@ public class DrawingPanel extends JPanel {
             }
         }
 
-        // Gambar area irisan dua shape yang keduanya terpilih
+        // Gambar area irisan antar-shape
         drawIntersections(g2d);
+
+        // Gambar garis sumbu refleksi eksplisit
+        drawReflectionGuides(g2d, canvasBounds);
 
         // Preview shape saat drag
         if (dragStartPoint != null && currentDragPoint != null && !draggingSelectedShape && !rubberBanding) {
@@ -194,6 +218,10 @@ public class DrawingPanel extends JPanel {
         // Rubber-band selection rectangle
         if (rubberBanding && dragStartPoint != null && currentDragPoint != null) {
             drawRubberBand(g2d);
+        }
+
+        if (drawingReflectionLine && dragStartPoint != null && currentDragPoint != null) {
+            drawReflectionLinePreview(g2d);
         }
 
         g2d.setClip(oldClip);
@@ -391,6 +419,50 @@ public class DrawingPanel extends JPanel {
         }
     }
 
+    private void drawReflectionGuides(Graphics2D g2d, Rectangle canvasBounds) {
+        Set<String> drawnAxes = new HashSet<>();
+        double length = Math.hypot(canvasBounds.width, canvasBounds.height) * 1.5;
+
+        for (ShapeObject shapeObject : shapeManager.getShapes()) {
+            drawReflectionGuideForShape(g2d, shapeObject, canvasBounds, drawnAxes, length);
+        }
+    }
+
+    private void drawReflectionGuideForShape(Graphics2D g2d, ShapeObject shapeObject,
+                                             Rectangle canvasBounds, Set<String> drawnAxes, double length) {
+        if (shapeObject instanceof GroupObject) {
+            for (ShapeObject member : ((GroupObject) shapeObject).getMembers()) {
+                drawReflectionGuideForShape(g2d, member, canvasBounds, drawnAxes, length);
+            }
+            return;
+        }
+
+        if (!shapeObject.isReflected() || !shapeObject.hasExplicitReflectionAxis()) {
+            return;
+        }
+
+        String key = Math.round(shapeObject.getReflectionAxisX()) + "_"
+                + Math.round(shapeObject.getReflectionAxisY()) + "_"
+                + Math.round(shapeObject.getReflectionAxisAngle());
+        if (!drawnAxes.add(key)) {
+            return;
+        }
+
+        double angle = Math.toRadians(shapeObject.getReflectionAxisAngle());
+        double dx = Math.cos(angle) * length;
+        double dy = Math.sin(angle) * length;
+        double cx = shapeObject.getReflectionAxisX();
+        double cy = shapeObject.getReflectionAxisY();
+
+        Shape oldClip = g2d.getClip();
+        g2d.setClip(getCanvasShape(canvasBounds));
+        g2d.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
+                10, new float[]{8, 5}, 0));
+        g2d.setColor(new Color(40, 40, 40, 190));
+        g2d.draw(new Line2D.Double(cx - dx, cy - dy, cx + dx, cy + dy));
+        g2d.setClip(oldClip);
+    }
+
     private Color blendColors(Color a, Color b) {
         return new Color(
                 (a.getRed()   + b.getRed())   / 2,
@@ -436,6 +508,13 @@ public class DrawingPanel extends JPanel {
                 10, new float[]{4, 3}, 0));
         g2d.setColor(SELECTION_BLUE);
         g2d.drawRect(x, y, w, h);
+    }
+
+    private void drawReflectionLinePreview(Graphics2D g2d) {
+        g2d.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
+                10, new float[]{8, 5}, 0));
+        g2d.setColor(new Color(20, 20, 20, 210));
+        g2d.drawLine(dragStartPoint.x, dragStartPoint.y, currentDragPoint.x, currentDragPoint.y);
     }
 
     private void drawPreview(Graphics2D g2d) {
@@ -560,8 +639,34 @@ public class DrawingPanel extends JPanel {
                 lastDragPoint = mousePoint;
                 currentDragPoint = mousePoint;
 
+                if (reflectionLineMode) {
+                    drawingReflectionLine = true;
+                    draggingSelectedShape = false;
+                    rubberBanding = false;
+                    return;
+                }
+
                 if (currentTool == ToolType.SELECT) {
                     boolean ctrl = (e.getModifiersEx() & InputEvent.CTRL_DOWN_MASK) != 0;
+
+                    ShapeObject[] pair = findIntersectionAt(e.getX(), e.getY());
+                    if (pair != null && !ctrl) {
+                        Color current = shapeManager.getIntersectionColor(pair[0], pair[1]);
+                        if (current == null) {
+                            current = blendColors(pair[0].getFillColor(), pair[1].getFillColor());
+                        }
+                        Color chosen = JColorChooser.showDialog(
+                                DrawingPanel.this, "Warna Area Irisan", current);
+                        if (chosen != null) {
+                            shapeManager.setIntersectionColor(pair[0], pair[1], chosen);
+                            repaint();
+                        }
+                        dragStartPoint = null;
+                        lastDragPoint = null;
+                        currentDragPoint = null;
+                        return;
+                    }
+
                     ShapeObject clickedShape = shapeManager.findShapeAt(e.getX(), e.getY());
 
                     if (clickedShape != null) {
@@ -575,24 +680,11 @@ public class DrawingPanel extends JPanel {
                                 shapeManager.selectShape(clickedShape);
                             }
                         }
+                        dragHistoryShapes = getFlatSelectedShapes();
+                        dragBeforeStates = snapshotStates(dragHistoryShapes);
                         notifySelectionChanged();
                         repaint();
                     } else {
-                        // Cek apakah klik tepat di area irisan
-                        ShapeObject[] pair = findIntersectionAt(e.getX(), e.getY());
-                        if (pair != null && !ctrl) {
-                            // Klik di irisan: munculkan color chooser
-                            Color current = shapeManager.getIntersectionColor(pair[0], pair[1]);
-                            if (current == null) current = blendColors(pair[0].getFillColor(), pair[1].getFillColor());
-                            Color chosen = JColorChooser.showDialog(
-                                    DrawingPanel.this, "Warna Area Irisan", current);
-                            if (chosen != null) {
-                                shapeManager.setIntersectionColor(pair[0], pair[1], chosen);
-                                repaint();
-                            }
-                            dragStartPoint = null;
-                            return;
-                        }
                         // Klik di area kosong
                         draggingSelectedShape = false;
                         if (!ctrl) {
@@ -616,6 +708,10 @@ public class DrawingPanel extends JPanel {
                 currentDragPoint = clampToCanvas(e.getPoint());
 
                 if (currentTool == ToolType.SELECT) {
+                    if (drawingReflectionLine) {
+                        repaint();
+                        return;
+                    }
                     if (draggingSelectedShape) {
                         // Gerakkan semua shape yang terpilih sekaligus
                         int deltaX = currentDragPoint.x - lastDragPoint.x;
@@ -644,7 +740,19 @@ public class DrawingPanel extends JPanel {
             @Override
             public void mouseReleased(MouseEvent e) {
                 Point releasePoint = clampToCanvas(e.getPoint());
+                if (drawingReflectionLine) {
+                    applyDrawnReflectionLine(releasePoint);
+                    drawingReflectionLine = false;
+                    reflectionLineMode = false;
+                    dragStartPoint = null;
+                    lastDragPoint = null;
+                    currentDragPoint = null;
+                    setCursor(java.awt.Cursor.getDefaultCursor());
+                    repaint();
+                    return;
+                }
                 if (currentTool == ToolType.SELECT) {
+                    recordDragHistoryIfNeeded();
                     draggingSelectedShape = false;
                     rubberBanding = false;
                     dragStartPoint = null;
@@ -664,6 +772,59 @@ public class DrawingPanel extends JPanel {
 
         addMouseListener(mouseAdapter);
         addMouseMotionListener(mouseAdapter);
+    }
+
+    private List<ShapeObject> getFlatSelectedShapes() {
+        List<ShapeObject> targets = new ArrayList<>();
+        for (ShapeObject selected : shapeManager.getSelectedShapes()) {
+            if (selected instanceof GroupObject) {
+                targets.addAll(((GroupObject) selected).getMembers());
+            } else {
+                targets.add(selected);
+            }
+        }
+        return targets;
+    }
+
+    private List<ShapeState> snapshotStates(List<ShapeObject> shapes) {
+        List<ShapeState> states = new ArrayList<>();
+        for (ShapeObject shape : shapes) {
+            states.add(new ShapeState(shape));
+        }
+        return states;
+    }
+
+    private void recordDragHistoryIfNeeded() {
+        if (dragHistoryShapes == null || dragBeforeStates == null || dragHistoryShapes.isEmpty()) {
+            return;
+        }
+        historyManager.recordCommand(new ModifyShapesCommand(
+                dragHistoryShapes, dragBeforeStates, snapshotStates(dragHistoryShapes)));
+        dragHistoryShapes = null;
+        dragBeforeStates = null;
+    }
+
+    private void applyDrawnReflectionLine(Point endPoint) {
+        if (dragStartPoint == null || dragStartPoint.distance(endPoint) < 4) {
+            return;
+        }
+
+        List<ShapeObject> targets = getFlatSelectedShapes();
+        if (targets.isEmpty()) {
+            return;
+        }
+
+        List<ShapeState> before = snapshotStates(targets);
+        double angle = Math.toDegrees(Math.atan2(endPoint.y - dragStartPoint.y, endPoint.x - dragStartPoint.x));
+        double axisX = dragStartPoint.x;
+        double axisY = dragStartPoint.y;
+        for (ShapeObject shape : targets) {
+            shape.setReflected(true);
+            shape.setReflectDirection(3);
+            shape.setReflectionAxisLine(axisX, axisY, angle);
+        }
+        historyManager.recordCommand(new ModifyShapesCommand(targets, before, snapshotStates(targets)));
+        notifySelectionChanged();
     }
 
     private void setupKeyboardHandlers() {

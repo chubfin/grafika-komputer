@@ -39,6 +39,14 @@ public class HistoryManager {
      */
     public void executeCommand(Command command) {
         command.execute();
+        recordCommand(command);
+    }
+
+    /**
+     * Mencatat command yang aksinya sudah terjadi.
+     * Dipakai untuk perubahan interaktif seperti drag, spinner, dan color picker.
+     */
+    public void recordCommand(Command command) {
 
         // Simpan ke undoStack dengan batas maksimal
         if (undoStack.size() >= MAX_HISTORY) {

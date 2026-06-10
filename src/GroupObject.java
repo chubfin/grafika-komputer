@@ -78,6 +78,30 @@ public class GroupObject extends ShapeObject {
         }
     }
 
+    @Override
+    public void setReflectDirection(int reflectDirection) {
+        super.setReflectDirection(reflectDirection);
+        for (ShapeObject m : members) {
+            m.setReflectDirection(reflectDirection);
+        }
+    }
+
+    @Override
+    public void setReflectionAxisLine(double axisX, double axisY, double angleDegrees) {
+        super.setReflectionAxisLine(axisX, axisY, angleDegrees);
+        for (ShapeObject m : members) {
+            m.setReflectionAxisLine(axisX, axisY, angleDegrees);
+        }
+    }
+
+    @Override
+    public void clearReflectionAxisLine() {
+        super.clearReflectionAxisLine();
+        for (ShapeObject m : members) {
+            m.clearReflectionAxisLine();
+        }
+    }
+
     /**
      * Hit-test: cek apakah titik (x,y) ada di dalam salah satu member.
      */

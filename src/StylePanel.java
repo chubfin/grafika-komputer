@@ -22,6 +22,7 @@ import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.List;
+import java.util.ArrayList;
 
 public class StylePanel extends JPanel {
 
@@ -253,9 +254,13 @@ public class StylePanel extends JPanel {
             drawingPanel.setCurrentStrokeWidth(((Number) strokeWidthSpinner.getValue()).floatValue());
             drawingPanel.setCurrentLineStyle((LineStyle) lineStyleComboBox.getSelectedItem());
         } else {
+            List<ShapeObject> targets = flattenShapes(selected);
+            List<ShapeState> before = snapshotStates(targets);
             for (ShapeObject shape : selected) {
                 applyStyleToShape(shape);
             }
+            drawingPanel.getHistoryManager().recordCommand(
+                    new ModifyShapesCommand(targets, before, snapshotStates(targets)));
         }
 
         onChangeCallback.run();
@@ -286,6 +291,26 @@ public class StylePanel extends JPanel {
             }
         }
         return shape;
+    }
+
+    private List<ShapeObject> flattenShapes(List<ShapeObject> shapes) {
+        List<ShapeObject> targets = new ArrayList<>();
+        for (ShapeObject shape : shapes) {
+            if (shape instanceof GroupObject) {
+                targets.addAll(((GroupObject) shape).getMembers());
+            } else {
+                targets.add(shape);
+            }
+        }
+        return targets;
+    }
+
+    private List<ShapeState> snapshotStates(List<ShapeObject> shapes) {
+        List<ShapeState> states = new ArrayList<>();
+        for (ShapeObject shape : shapes) {
+            states.add(new ShapeState(shape));
+        }
+        return states;
     }
 
     public void setStrokeWidth(float width) {

@@ -33,6 +33,10 @@ public class ShapeObject {
     private double skewY;
     private boolean reflected;
     private int reflectDirection;  // 0=none, 1=horizontal (Kiri/Kanan), 2=vertical (Atas/Bawah)
+    private boolean explicitReflectionAxis;
+    private double reflectionAxisX;
+    private double reflectionAxisY;
+    private double reflectionAxisAngle;
     private LineStyle originalLineStyle;
     
     // Animasi
@@ -99,6 +103,10 @@ public class ShapeObject {
         this.skewY = 0.0;
         this.reflected = false;
         this.reflectDirection = 0;
+        this.explicitReflectionAxis = false;
+        this.reflectionAxisX = 0.0;
+        this.reflectionAxisY = 0.0;
+        this.reflectionAxisAngle = 0.0;
         this.originalLineStyle = this.lineStyle;
         this.animationType = AnimationType.NONE;
         this.animSpeedX = 3.0;
@@ -150,6 +158,13 @@ public class ShapeObject {
     public AffineTransform getReflectionTransform() {
         if (!reflected || reflectDirection == 0) {
             return getTransform();
+        }
+
+        if (explicitReflectionAxis) {
+            AffineTransform reflectTx = createReflectionAcrossLine(
+                    reflectionAxisX, reflectionAxisY, reflectionAxisAngle);
+            reflectTx.concatenate(getTransform());
+            return reflectTx;
         }
         
         Shape transformedShape = getTransform().createTransformedShape(createBaseShape());
@@ -204,6 +219,16 @@ public class ShapeObject {
         // Gabungkan transform refleksi dunia dengan transform lokal bawaan objek asli
         reflectTx.concatenate(getTransform());
         return reflectTx;
+    }
+
+    private AffineTransform createReflectionAcrossLine(double axisX, double axisY, double angleDegrees) {
+        AffineTransform tx = new AffineTransform();
+        tx.translate(axisX, axisY);
+        tx.rotate(Math.toRadians(angleDegrees));
+        tx.scale(1, -1);
+        tx.rotate(Math.toRadians(-angleDegrees));
+        tx.translate(-axisX, -axisY);
+        return tx;
     }
 
     private Shape createBaseShape() {
@@ -346,12 +371,28 @@ public class ShapeObject {
     public boolean isReflected() { return reflected; }
     public int getReflectDirection() { return reflectDirection; }
     public void setReflectDirection(int reflectDirection) { this.reflectDirection = reflectDirection; }
+    public boolean hasExplicitReflectionAxis() { return explicitReflectionAxis; }
+    public double getReflectionAxisX() { return reflectionAxisX; }
+    public double getReflectionAxisY() { return reflectionAxisY; }
+    public double getReflectionAxisAngle() { return reflectionAxisAngle; }
+    
+    public void setReflectionAxisLine(double axisX, double axisY, double angleDegrees) {
+        this.explicitReflectionAxis = true;
+        this.reflectionAxisX = axisX;
+        this.reflectionAxisY = axisY;
+        this.reflectionAxisAngle = angleDegrees;
+    }
+    
+    public void clearReflectionAxisLine() {
+        this.explicitReflectionAxis = false;
+    }
     
     public void setReflected(boolean reflected) {
         if (reflected && !this.reflected) {
             this.originalLineStyle = this.lineStyle;
         } else if (!reflected && this.reflected) {
             this.lineStyle = this.originalLineStyle;
+            clearReflectionAxisLine();
         }
         this.reflected = reflected;
     }
