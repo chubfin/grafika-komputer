@@ -74,9 +74,16 @@ public class MainFrame extends JFrame {
 
         setJMenuBar(createMenuBar());
         add(createToolBar(), BorderLayout.WEST);
-        add(drawingPanel, BorderLayout.CENTER);
+
+        // Bungkus drawing panel + status bar dalam satu panel tengah
+        // agar status bar tidak memanjang ke bawah panel kanan
+        JPanel centerPanel = new JPanel(new BorderLayout());
+        centerPanel.setBackground(APP_BG);
+        centerPanel.add(drawingPanel, BorderLayout.CENTER);
+        centerPanel.add(createStatusBar(), BorderLayout.SOUTH);
+
+        add(centerPanel, BorderLayout.CENTER);
         add(createRightPanel(), BorderLayout.EAST);
-        add(createStatusBar(), BorderLayout.SOUTH);
 
         setVisible(true);
     }
@@ -614,7 +621,7 @@ public class MainFrame extends JFrame {
         JPanel actions = new JPanel(new GridLayout(1, 3, 8, 0));
         actions.setOpaque(false);
         actions.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 10));
-        actions.add(createStatusButton("Undo", () -> {
+        actions.add(createStatusButton("Undo", "undo", () -> {
             HistoryManager history = drawingPanel.getHistoryManager();
             if (history.undo()) {
                 drawingPanel.repaint();
@@ -624,7 +631,7 @@ public class MainFrame extends JFrame {
                 statusLabel.setText("Tidak ada aksi yang bisa di-undo");
             }
         }));
-        actions.add(createStatusButton("Redo", () -> {
+        actions.add(createStatusButton("Redo", "redo", () -> {
             HistoryManager history = drawingPanel.getHistoryManager();
             if (history.redo()) {
                 drawingPanel.repaint();
@@ -634,7 +641,7 @@ public class MainFrame extends JFrame {
                 statusLabel.setText("Tidak ada aksi yang bisa di-redo");
             }
         }));
-        actions.add(createStatusButton("Clear Canvas", () -> {
+        actions.add(createStatusButton("Clear Canvas", "clear", () -> {
             shapeManager.clearAll();
             drawingPanel.getHistoryManager().clearHistory();
             drawingPanel.repaint();
@@ -720,8 +727,55 @@ public class MainFrame extends JFrame {
     }
 
     private JButton createStatusButton(String text, Runnable action) {
-        JButton button = new JButton(text);
+        return createStatusButton(text, null, action);
+    }
+
+    private JButton createStatusButton(String text, String iconType, Runnable action) {
+        JButton button = new JButton() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // Background
+                Color bg = getModel().isPressed()
+                        ? new Color(38, 43, 49)
+                        : getModel().isRollover()
+                        ? new Color(60, 66, 74)
+                        : new Color(49, 54, 60);
+                g2.setColor(bg);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+
+                int iconSize = 14;
+                int textGap = 6;
+                FontMetrics fm = g2.getFontMetrics(getFont());
+                int textW = fm.stringWidth(getText());
+                int totalW = (iconType != null ? iconSize + textGap : 0) + textW;
+                int startX = (getWidth() - totalW) / 2;
+                int cy = getHeight() / 2;
+
+                // Icon
+                if (iconType != null) {
+                    g2.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    g2.setColor(isEnabled() ? TEXT : new Color(100, 106, 113));
+                    int ix = startX;
+                    int iy = cy - iconSize / 2;
+                    paintStatusIcon(g2, iconType, ix, iy, iconSize);
+                    startX += iconSize + textGap;
+                }
+
+                // Text
+                g2.setFont(getFont());
+                g2.setColor(isEnabled() ? TEXT : new Color(100, 106, 113));
+                g2.drawString(getText(), startX, cy + fm.getAscent() / 2 - 1);
+                g2.dispose();
+            }
+        };
+        button.setText(text);
         button.setFocusPainted(false);
+        button.setContentAreaFilled(false);
+        button.setBorderPainted(false);
+        button.setOpaque(false);
         button.setForeground(TEXT);
         button.setBackground(new Color(49, 54, 60));
         button.setBorder(BorderFactory.createCompoundBorder(
@@ -729,6 +783,61 @@ public class MainFrame extends JFrame {
                 BorderFactory.createEmptyBorder(5, 12, 5, 12)));
         button.addActionListener(e -> action.run());
         return button;
+    }
+
+    private void paintStatusIcon(Graphics2D g2, String type, int x, int y, int size) {
+        switch (type) {
+            case "undo": {
+                // Path: C3 10 C3 6 6 3 10 3 L13 3  (hook bawah, ekor kanan)
+                g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                java.awt.geom.GeneralPath path = new java.awt.geom.GeneralPath();
+                double s = size / 16.0;
+                path.moveTo(x + 3*s, y + 10*s);
+                path.curveTo(x + 3*s, y + 6*s, x + 6*s, y + 3*s, x + 10*s, y + 3*s);
+                path.lineTo(x + 13*s, y + 3*s);
+                g2.draw(path);
+                // Kepala panah di (3,6), (3,10), (7,10)
+                java.awt.geom.GeneralPath arrow = new java.awt.geom.GeneralPath();
+                arrow.moveTo(x + 3*s,  y + 6*s);
+                arrow.lineTo(x + 3*s,  y + 10*s);
+                arrow.lineTo(x + 7*s,  y + 10*s);
+                g2.draw(arrow);
+                break;
+            }
+            case "redo": {
+                // Mirror: hook bawah, ekor kiri
+                g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                double s = size / 16.0;
+                java.awt.geom.GeneralPath path = new java.awt.geom.GeneralPath();
+                path.moveTo(x + 13*s, y + 10*s);
+                path.curveTo(x + 13*s, y + 6*s, x + 10*s, y + 3*s, x + 6*s, y + 3*s);
+                path.lineTo(x + 3*s, y + 3*s);
+                g2.draw(path);
+                // Kepala panah di (13,6), (13,10), (9,10)
+                java.awt.geom.GeneralPath arrow = new java.awt.geom.GeneralPath();
+                arrow.moveTo(x + 13*s, y + 6*s);
+                arrow.lineTo(x + 13*s, y + 10*s);
+                arrow.lineTo(x + 9*s,  y + 10*s);
+                g2.draw(arrow);
+                break;
+            }
+            case "clear": {
+                // Ikon tempat sampah
+                g2.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                int tw = size - 4;
+                int tx = x + 2;
+                // Badan
+                g2.drawRoundRect(tx + 1, y + 4, tw - 2, size - 6, 2, 2);
+                // Tutup
+                g2.drawLine(tx, y + 4, tx + tw, y + 4);
+                g2.drawLine(tx + 3, y + 2, tx + tw - 3, y + 2);
+                // Garis dalam
+                g2.drawLine(tx + 3, y + 6, tx + 3, y + size - 4);
+                g2.drawLine(tx + tw / 2, y + 6, tx + tw / 2, y + size - 4);
+                g2.drawLine(tx + tw - 3, y + 6, tx + tw - 3, y + size - 4);
+                break;
+            }
+        }
     }
 
     private final class ToolButton extends JToggleButton {
