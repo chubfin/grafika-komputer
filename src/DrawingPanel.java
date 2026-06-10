@@ -161,6 +161,10 @@ public class DrawingPanel extends JPanel {
         Graphics2D g2d = (Graphics2D) g.create();
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         Rectangle canvasBounds = getCanvasBounds();
+        
+        // KIRIM BOUNDS CANVAS KE SHAPEOBJECT
+        ShapeObject.setCanvasBounds(canvasBounds);
+        
         Shape canvasShape = getCanvasShape(canvasBounds);
         drawCanvasSurface(g2d, canvasBounds);
         Shape oldClip = g2d.getClip();
@@ -247,72 +251,84 @@ public class DrawingPanel extends JPanel {
     }
 
     private void drawShape(Graphics2D g2d, ShapeObject shapeObject) {
-        Shape shape = createDrawableShape(shapeObject);
+    Shape shape = createDrawableShape(shapeObject);
 
-        AffineTransform originalTransform = g2d.getTransform();
+    AffineTransform originalTransform = g2d.getTransform();
 
-        AffineTransform transform = new AffineTransform(originalTransform);
-        transform.concatenate(shapeObject.getTransform());
-        g2d.setTransform(transform);
+    AffineTransform transform = new AffineTransform(originalTransform);
+    transform.concatenate(shapeObject.getTransform());
+    g2d.setTransform(transform);
 
-        if (shapeObject.getType() != ToolType.LINE && shapeObject.isFillEnabled()) {
-            Paint paint = shapeObject.isGradientFill()
-                    ? new GradientPaint(0, 0, shapeObject.getFillColor(),
-                    Math.max(1, shapeObject.getWidth()), Math.max(1, shapeObject.getHeight()),
-                    shapeObject.getFillSecondaryColor())
-                    : shapeObject.getFillColor();
-            g2d.setPaint(paint);
-            g2d.fill(shape);
-        }
+    // Gambar shape utama
+    if (shapeObject.getType() != ToolType.LINE && shapeObject.isFillEnabled()) {
+        Paint paint = shapeObject.isGradientFill()
+                ? new GradientPaint(0, 0, shapeObject.getFillColor(),
+                Math.max(1, shapeObject.getWidth()), Math.max(1, shapeObject.getHeight()),
+                shapeObject.getFillSecondaryColor())
+                : shapeObject.getFillColor();
+        g2d.setPaint(paint);
+        g2d.fill(shape);
+    }
 
-        g2d.setStroke(createStroke(shapeObject.getStrokeWidth(), shapeObject.getLineStyle()));
-        g2d.setColor(shapeObject.getStrokeColor());
-        g2d.draw(shape);
+    // Gunakan stroke ASLI untuk objek utama
+    g2d.setStroke(createStroke(shapeObject.getStrokeWidth(), shapeObject.getLineStyle()));
+    g2d.setColor(shapeObject.getStrokeColor());
+    g2d.draw(shape);
 
-        if (shapeObject.isSelected()) {
-            Rectangle bounds = shape.getBounds();
-            g2d.setColor(SELECTION_FILL);
-            g2d.fill(bounds);
-            g2d.setStroke(new BasicStroke(2));
-            g2d.setColor(SELECTION_BLUE);
-            g2d.draw(bounds);
-            drawSelectionHandles(g2d, bounds);
-        }
-
-        // refleksi horizontal
-        if (shapeObject.isReflected()) {
-            AffineTransform reflectTransform = new AffineTransform(originalTransform);
-            reflectTransform.concatenate(shapeObject.getReflectionTransform());
-            g2d.setTransform(reflectTransform);
-
+    // ========== GAMBAR BAYANGAN REFLECTION ==========
+    if (shapeObject.isReflected() && shapeObject.getReflectDirection() != 0) {
+        Shape reflectionShape = shapeObject.getReflectionShape();
+        if (reflectionShape != null) {
+            // Simpan transformasi asli
+            AffineTransform savedTransform = g2d.getTransform();
+            g2d.setTransform(originalTransform);
+            
+            // Gunakan stroke DASHED untuk bayangan
+            g2d.setStroke(createStroke(shapeObject.getStrokeWidth(), LineStyle.DASHED));
+            
+            // Set semi-transparan
+            Color fillColor = shapeObject.getFillColor();
+            Color semiTransparent = new Color(fillColor.getRed(), fillColor.getGreen(), 
+                                               fillColor.getBlue(), 120);
+            
+            // Fill bayangan
             if (shapeObject.getType() != ToolType.LINE && shapeObject.isFillEnabled()) {
-                Color fillColor = shapeObject.getFillColor();
                 if (shapeObject.isGradientFill()) {
-                    Paint paint = new GradientPaint(0, 0,
-                            new Color(fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue(), 120),
+                    Paint paint = new GradientPaint(0, 0, semiTransparent,
                             Math.max(1, shapeObject.getWidth()), Math.max(1, shapeObject.getHeight()),
                             new Color(shapeObject.getFillSecondaryColor().getRed(),
                                     shapeObject.getFillSecondaryColor().getGreen(),
                                     shapeObject.getFillSecondaryColor().getBlue(), 120));
                     g2d.setPaint(paint);
                 } else {
-                    g2d.setColor(new Color(fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue(), 120));
+                    g2d.setColor(semiTransparent);
                 }
-                g2d.fill(shape);
+                g2d.fill(reflectionShape);
             }
-            g2d.setStroke(createStroke(shapeObject.getStrokeWidth(), shapeObject.getLineStyle()));
+            
+            // Outline bayangan
+            g2d.setStroke(createStroke(shapeObject.getStrokeWidth(), LineStyle.DASHED));
             g2d.setColor(shapeObject.getStrokeColor());
-            g2d.draw(shape);
-
-            if (shapeObject.isSelected()) {
-                g2d.setStroke(new BasicStroke(2));
-                g2d.setColor(SELECTION_BLUE);
-                g2d.draw(shape.getBounds2D());
-            }
+            g2d.draw(reflectionShape);
+            
+            // Kembalikan transformasi
+            g2d.setTransform(savedTransform);
         }
-        g2d.setTransform(originalTransform);
+    }
+    // ================================================
+
+    if (shapeObject.isSelected()) {
+        Rectangle bounds = shape.getBounds();
+        g2d.setColor(SELECTION_FILL);
+        g2d.fill(bounds);
+        g2d.setStroke(new BasicStroke(2));
+        g2d.setColor(SELECTION_BLUE);
+        g2d.draw(bounds);
+        drawSelectionHandles(g2d, bounds);
     }
 
+    g2d.setTransform(originalTransform);
+}
     private void drawSelectionHandles(Graphics2D g2d, Rectangle bounds) {
         int size = 8;
         int half = size / 2;

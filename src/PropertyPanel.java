@@ -143,74 +143,72 @@ public class PropertyPanel extends JPanel {
     }
 
     private void setupListeners() {
-        ChangeListener listener = e -> {
-            if (currentShape == null || isUpdating) return;
-            currentShape.setX(((Number) xSpinner.getValue()).intValue());
-            currentShape.setY(((Number) ySpinner.getValue()).intValue());
-            currentShape.setRotation(((Number) rotationSpinner.getValue()).doubleValue());
-            currentShape.setScaleX(((Number) scaleXSpinner.getValue()).doubleValue());
-            currentShape.setScaleY(((Number) scaleYSpinner.getValue()).doubleValue());
-            currentShape.setSkewX(((Number) skewXSpinner.getValue()).doubleValue());
-            currentShape.setSkewY(((Number) skewYSpinner.getValue()).doubleValue());
-            onChangeCallback.run();
-        };
+    ChangeListener listener = e -> {
+        if (currentShape == null || isUpdating) return;
+        currentShape.setX(((Number) xSpinner.getValue()).intValue());
+        currentShape.setY(((Number) ySpinner.getValue()).intValue());
+        currentShape.setRotation(((Number) rotationSpinner.getValue()).doubleValue());
+        currentShape.setScaleX(((Number) scaleXSpinner.getValue()).doubleValue());
+        currentShape.setScaleY(((Number) scaleYSpinner.getValue()).doubleValue());
+        currentShape.setSkewX(((Number) skewXSpinner.getValue()).doubleValue());
+        currentShape.setSkewY(((Number) skewYSpinner.getValue()).doubleValue());
+        onChangeCallback.run();
+    };
 
-        xSpinner.addChangeListener(listener);
-        ySpinner.addChangeListener(listener);
-        rotationSpinner.addChangeListener(listener);
-        scaleXSpinner.addChangeListener(listener);
-        scaleYSpinner.addChangeListener(listener);
-        skewXSpinner.addChangeListener(listener);
-        skewYSpinner.addChangeListener(listener);
+    xSpinner.addChangeListener(listener);
+    ySpinner.addChangeListener(listener);
+    rotationSpinner.addChangeListener(listener);
+    scaleXSpinner.addChangeListener(listener);
+    scaleYSpinner.addChangeListener(listener);
+    skewXSpinner.addChangeListener(listener);
+    skewYSpinner.addChangeListener(listener);
 
-        java.awt.event.ActionListener reflectionListener = e -> {
-            if (isUpdating || currentShape == null) return;
-            // Untuk sekarang reflection = true jika Horizontal atau Vertical dipilih
-            currentShape.setReflected(!reflectNoneRadio.isSelected());
-            onChangeCallback.run();
-        };
-        reflectNoneRadio.addActionListener(reflectionListener);
-        reflectHorizontalRadio.addActionListener(reflectionListener);
-        reflectVerticalRadio.addActionListener(reflectionListener);
-    }
+    // Reflection listener - TIDAK mengubah line style objek asli
+    java.awt.event.ActionListener reflectionListener = e -> {
+        if (isUpdating || currentShape == null) return;
+        
+        if (reflectNoneRadio.isSelected()) {
+            currentShape.setReflected(false);
+            currentShape.setReflectDirection(0);
+        } else if (reflectHorizontalRadio.isSelected()) {
+            currentShape.setReflected(true);
+            currentShape.setReflectDirection(1);
+        } else if (reflectVerticalRadio.isSelected()) {
+            currentShape.setReflected(true);
+            currentShape.setReflectDirection(2);
+        }
+        onChangeCallback.run();
+    };
+    reflectNoneRadio.addActionListener(reflectionListener);
+    reflectHorizontalRadio.addActionListener(reflectionListener);
+    reflectVerticalRadio.addActionListener(reflectionListener);
+}
 
-    public void showShape(ShapeObject shape) {
-        isUpdating = true;
+public void showShape(ShapeObject shape) {
+    isUpdating = true;
+    currentShape = shape;
 
-        currentShape = shape;
-
-        if (shape == null) {
-            typeValue.setText("-");
-            widthValue.setText("-");
-            heightValue.setText("-");
-            xSpinner.setValue(0);
-            ySpinner.setValue(0);
-            rotationSpinner.setValue(0.0);
-            scaleXSpinner.setValue(1.0);
-            scaleYSpinner.setValue(1.0);
-            skewXSpinner.setValue(0.0);
-            skewYSpinner.setValue(0.0);
+    if (shape == null) {
+        // ... reset values ...
+        reflectNoneRadio.setSelected(true);
+    } else {
+        // ... set other values ...
+        
+        // Reflection handling
+        if (!shape.isReflected()) {
             reflectNoneRadio.setSelected(true);
         } else {
-            typeValue.setText(shape.getType().getDisplayName());
-            widthValue.setText(String.valueOf(shape.getWidth()));
-            heightValue.setText(String.valueOf(shape.getHeight()));
-            xSpinner.setValue(shape.getX());
-            ySpinner.setValue(shape.getY());
-            rotationSpinner.setValue(shape.getRotation());
-            scaleXSpinner.setValue(shape.getScaleX());
-            scaleYSpinner.setValue(shape.getScaleY());
-            skewXSpinner.setValue(shape.getSkewX());
-            skewYSpinner.setValue(shape.getSkewY());
-            if (!shape.isReflected()) {
-                reflectNoneRadio.setSelected(true);
-            } else {
+            if (shape.getReflectDirection() == 1) {
                 reflectHorizontalRadio.setSelected(true);
+            } else if (shape.getReflectDirection() == 2) {
+                reflectVerticalRadio.setSelected(true);
+            } else {
+                reflectNoneRadio.setSelected(true);
             }
         }
-
-        isUpdating = false;
     }
+    isUpdating = false;
+}
 
     // -------------------------------------------------------------------------
     // Layout helper methods

@@ -329,53 +329,76 @@ public class MainFrame extends JFrame {
     // =========================================================================
 
     private JMenu createTransformMenu() {
-        JMenu transformMenu = new JMenu("Transform");
+    JMenu transformMenu = new JMenu("Transform");
 
-        JMenuItem rotateItem = new JMenuItem("Rotate +15°");
-        rotateItem.addActionListener(e -> applyTransformToSelected(
-                shape -> shape.setRotation(shape.getRotation() + 15)));
+    JMenuItem rotateItem = new JMenuItem("Rotate +15°");
+    rotateItem.addActionListener(e -> applyTransformToSelected(
+            shape -> shape.setRotation(shape.getRotation() + 15)));
 
-        JMenuItem rotateCCWItem = new JMenuItem("Rotate -15°");
-        rotateCCWItem.addActionListener(e -> applyTransformToSelected(
-                shape -> shape.setRotation(shape.getRotation() - 15)));
+    JMenuItem rotateCCWItem = new JMenuItem("Rotate -15°");
+    rotateCCWItem.addActionListener(e -> applyTransformToSelected(
+            shape -> shape.setRotation(shape.getRotation() - 15)));
 
-        JMenuItem scaleUpItem = new JMenuItem("Scale Up (+10%)");
-        scaleUpItem.addActionListener(e -> applyTransformToSelected(shape -> {
-            shape.setScaleX(shape.getScaleX() * 1.1);
-            shape.setScaleY(shape.getScaleY() * 1.1);
-        }));
+    JMenuItem scaleUpItem = new JMenuItem("Scale Up (+10%)");
+    scaleUpItem.addActionListener(e -> applyTransformToSelected(shape -> {
+        shape.setScaleX(shape.getScaleX() * 1.1);
+        shape.setScaleY(shape.getScaleY() * 1.1);
+    }));
 
-        JMenuItem scaleDownItem = new JMenuItem("Scale Down (-10%)");
-        scaleDownItem.addActionListener(e -> applyTransformToSelected(shape -> {
-            shape.setScaleX(shape.getScaleX() / 1.1);
-            shape.setScaleY(shape.getScaleY() / 1.1);
-        }));
+    JMenuItem scaleDownItem = new JMenuItem("Scale Down (-10%)");
+    scaleDownItem.addActionListener(e -> applyTransformToSelected(shape -> {
+        shape.setScaleX(shape.getScaleX() / 1.1);
+        shape.setScaleY(shape.getScaleY() / 1.1);
+    }));
 
-        JMenuItem reflectItem = new JMenuItem("Reflect Horizontal");
-        reflectItem.addActionListener(e -> applyTransformToSelected(
-                shape -> shape.setReflected(!shape.isReflected())));
+    // Reflection Horizontal - bayangan di samping kiri/kanan
+    JMenuItem reflectHorizontalItem = new JMenuItem("Reflect Horizontal (Kiri/Kanan)");
+    reflectHorizontalItem.addActionListener(e -> applyTransformToSelected(shape -> {
+        shape.setReflected(true);
+        shape.setReflectDirection(1);
+        // TIDAK mengubah line style objek asli
+    }));
 
-        JMenuItem resetItem = new JMenuItem("Reset Transform");
-        resetItem.addActionListener(e -> applyTransformToSelected(shape -> {
-            shape.setRotation(0);
-            shape.setScaleX(1.0);
-            shape.setScaleY(1.0);
-            shape.setSkewX(0);
-            shape.setSkewY(0);
-            shape.setReflected(false);
-        }));
+    // Reflection Vertical - bayangan di bawah/atas
+    JMenuItem reflectVerticalItem = new JMenuItem("Reflect Vertical (Atas/Bawah)");
+    reflectVerticalItem.addActionListener(e -> applyTransformToSelected(shape -> {
+        shape.setReflected(true);
+        shape.setReflectDirection(2);
+        // TIDAK mengubah line style objek asli
+    }));
 
-        transformMenu.add(rotateItem);
-        transformMenu.add(rotateCCWItem);
-        transformMenu.addSeparator();
-        transformMenu.add(scaleUpItem);
-        transformMenu.add(scaleDownItem);
-        transformMenu.addSeparator();
-        transformMenu.add(reflectItem);
-        transformMenu.addSeparator();
-        transformMenu.add(resetItem);
-        return transformMenu;
-    }
+    // Turn off reflection
+    JMenuItem reflectOffItem = new JMenuItem("Turn Off Reflection");
+    reflectOffItem.addActionListener(e -> applyTransformToSelected(shape -> {
+        shape.setReflected(false);
+        shape.setReflectDirection(0);
+        // Line style otomatis kembali ke original via setReflected()
+    }));
+
+    JMenuItem resetItem = new JMenuItem("Reset Transform");
+    resetItem.addActionListener(e -> applyTransformToSelected(shape -> {
+        shape.setRotation(0);
+        shape.setScaleX(1.0);
+        shape.setScaleY(1.0);
+        shape.setSkewX(0);
+        shape.setSkewY(0);
+        shape.setReflected(false);
+        shape.setReflectDirection(0);
+    }));
+
+    transformMenu.add(rotateItem);
+    transformMenu.add(rotateCCWItem);
+    transformMenu.addSeparator();
+    transformMenu.add(scaleUpItem);
+    transformMenu.add(scaleDownItem);
+    transformMenu.addSeparator();
+    transformMenu.add(reflectHorizontalItem);
+    transformMenu.add(reflectVerticalItem);
+    transformMenu.add(reflectOffItem);
+    transformMenu.addSeparator();
+    transformMenu.add(resetItem);
+    return transformMenu;
+}
 
     /**
      * Terapkan transformasi ke semua shape yang terpilih.
