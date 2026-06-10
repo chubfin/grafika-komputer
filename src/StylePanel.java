@@ -5,17 +5,22 @@ import javax.swing.JComboBox;
 import javax.swing.JColorChooser;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.List;
 
 public class StylePanel extends JPanel {
@@ -33,6 +38,10 @@ public class StylePanel extends JPanel {
 
     private final JCheckBox fillEnabledCheckbox;
     private final JCheckBox gradientCheckbox;
+    private final ColorSwatch fillColorSwatch;
+    private final ColorSwatch fillSecondarySwatch;
+    private final ColorSwatch strokeColorSwatch;
+    // Keep JButton references for API compatibility (delegate to swatches)
     private final JButton fillColorButton;
     private final JButton fillSecondaryButton;
     private final JButton strokeColorButton;
@@ -50,7 +59,7 @@ public class StylePanel extends JPanel {
         setLayout(new BorderLayout());
         setBackground(PANEL_BG);
         setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        setPreferredSize(new Dimension(250, 0));
+        setMaximumSize(new Dimension(250, Integer.MAX_VALUE));
 
         JLabel titleLabel = new JLabel("Style");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
@@ -63,10 +72,7 @@ public class StylePanel extends JPanel {
         JPanel contentPanel = new JPanel(new GridBagLayout());
         contentPanel.setBackground(PANEL_BG);
         contentPanel.setBorder(BorderFactory.createEmptyBorder(8, 12, 12, 12));
-        JScrollPane scrollPane = new JScrollPane(contentPanel);
-        scrollPane.setBorder(null);
-        scrollPane.getViewport().setBackground(PANEL_BG);
-        add(scrollPane, BorderLayout.CENTER);
+        add(contentPanel, BorderLayout.CENTER);
 
         fillEnabledCheckbox = new JCheckBox();
         gradientCheckbox = new JCheckBox();
@@ -75,9 +81,13 @@ public class StylePanel extends JPanel {
         gradientCheckbox.setOpaque(false);
         gradientCheckbox.setForeground(TEXT);
 
-        fillColorButton = createColorButton();
-        fillSecondaryButton = createColorButton();
-        strokeColorButton = createColorButton();
+        fillColorSwatch = new ColorSwatch(new Color(115, 166, 255));
+        fillSecondarySwatch = new ColorSwatch(new Color(255, 200, 100));
+        strokeColorSwatch = new ColorSwatch(Color.BLACK);
+        // Delegate JButton references to swatch's hidden button for legacy API
+        fillColorButton = fillColorSwatch.getProxyButton();
+        fillSecondaryButton = fillSecondarySwatch.getProxyButton();
+        strokeColorButton = strokeColorSwatch.getProxyButton();
 
         strokeWidthSpinner = new JSpinner(new SpinnerNumberModel(2.0, 1.0, 30.0, 0.5));
         lineStyleComboBox = new JComboBox<>(LineStyle.values());
@@ -90,12 +100,12 @@ public class StylePanel extends JPanel {
 
         addSectionLabel(contentPanel, row++, "Fill");
         addCheckboxRow(contentPanel, row++, "Enable Fill", fillEnabledCheckbox);
-        addButtonRow(contentPanel, row++, "Fill Color", fillColorButton);
+        addSwatchRow(contentPanel, row++, "Fill Color", fillColorSwatch);
         addCheckboxRow(contentPanel, row++, "Gradient Fill", gradientCheckbox);
-        addButtonRow(contentPanel, row++, "Gradient End", fillSecondaryButton);
+        addSwatchRow(contentPanel, row++, "Gradient End", fillSecondarySwatch);
 
         addSectionLabel(contentPanel, row++, "Stroke");
-        addButtonRow(contentPanel, row++, "Stroke Color", strokeColorButton);
+        addSwatchRow(contentPanel, row++, "Stroke Color", strokeColorSwatch);
         addSpinnerRow(contentPanel, row++, "Stroke Width", strokeWidthSpinner);
         addComboRow(contentPanel, row++, "Line Style", lineStyleComboBox);
 
@@ -110,122 +120,112 @@ public class StylePanel extends JPanel {
         ShapeObject source = resolveDisplayShape(shape);
         if (source == null) {
             fillEnabledCheckbox.setSelected(drawingPanel.isCurrentFillEnabled());
-            fillColorButton.setBackground(drawingPanel.getCurrentFillColor());
-            fillSecondaryButton.setBackground(drawingPanel.getCurrentFillSecondaryColor());
+            fillColorSwatch.setColor(drawingPanel.getCurrentFillColor());
+            fillSecondarySwatch.setColor(drawingPanel.getCurrentFillSecondaryColor());
             gradientCheckbox.setSelected(drawingPanel.isCurrentGradientFill());
-            strokeColorButton.setBackground(drawingPanel.getCurrentStrokeColor());
+            strokeColorSwatch.setColor(drawingPanel.getCurrentStrokeColor());
             strokeWidthSpinner.setValue((double) drawingPanel.getCurrentStrokeWidth());
             lineStyleComboBox.setSelectedItem(drawingPanel.getCurrentLineStyle());
         } else {
             fillEnabledCheckbox.setSelected(source.isFillEnabled());
-            fillColorButton.setBackground(source.getFillColor());
-            fillSecondaryButton.setBackground(source.getFillSecondaryColor());
+            fillColorSwatch.setColor(source.getFillColor());
+            fillSecondarySwatch.setColor(source.getFillSecondaryColor());
             gradientCheckbox.setSelected(source.isGradientFill());
-            strokeColorButton.setBackground(source.getStrokeColor());
+            strokeColorSwatch.setColor(source.getStrokeColor());
             strokeWidthSpinner.setValue((double) source.getStrokeWidth());
             lineStyleComboBox.setSelectedItem(source.getLineStyle());
         }
 
-        fillColorButton.setEnabled(fillEnabledCheckbox.isSelected());
-        fillSecondaryButton.setEnabled(fillEnabledCheckbox.isSelected() && gradientCheckbox.isSelected());
+        fillColorSwatch.setEnabled(fillEnabledCheckbox.isSelected());
+        fillSecondarySwatch.setEnabled(fillEnabledCheckbox.isSelected() && gradientCheckbox.isSelected());
         gradientCheckbox.setEnabled(fillEnabledCheckbox.isSelected());
 
         isUpdating = false;
     }
 
     public void chooseFillColor() {
-        Color initialColor = fillColorButton.getBackground();
+        Color initialColor = fillColorSwatch.getColor();
         Color selectedColor = JColorChooser.showDialog(this, "Fill Color", initialColor);
         if (selectedColor == null) {
             return;
         }
-        fillColorButton.setBackground(selectedColor);
+        fillColorSwatch.setColor(selectedColor);
         fillEnabledCheckbox.setSelected(true);
-        fillColorButton.setEnabled(true);
+        fillColorSwatch.setEnabled(true);
         gradientCheckbox.setEnabled(true);
         applyCurrentStyle();
     }
 
     public void chooseFillSecondaryColor() {
-        Color initialColor = fillSecondaryButton.getBackground();
+        Color initialColor = fillSecondarySwatch.getColor();
         Color selectedColor = JColorChooser.showDialog(this, "Gradient End Color", initialColor);
         if (selectedColor == null) {
             return;
         }
-        fillSecondaryButton.setBackground(selectedColor);
+        fillSecondarySwatch.setColor(selectedColor);
         fillEnabledCheckbox.setSelected(true);
         gradientCheckbox.setSelected(true);
-        fillSecondaryButton.setEnabled(true);
+        fillSecondarySwatch.setEnabled(true);
         applyCurrentStyle();
     }
 
     public void chooseStrokeColor() {
-        Color initialColor = strokeColorButton.getBackground();
+        Color initialColor = strokeColorSwatch.getColor();
         Color selectedColor = JColorChooser.showDialog(this, "Stroke Color", initialColor);
         if (selectedColor == null) {
             return;
         }
-        strokeColorButton.setBackground(selectedColor);
+        strokeColorSwatch.setColor(selectedColor);
         applyCurrentStyle();
     }
 
     public void setFillEnabled(boolean enabled) {
         fillEnabledCheckbox.setSelected(enabled);
-        fillColorButton.setEnabled(enabled);
+        fillColorSwatch.setEnabled(enabled);
         gradientCheckbox.setEnabled(enabled);
-        fillSecondaryButton.setEnabled(enabled && gradientCheckbox.isSelected());
+        fillSecondarySwatch.setEnabled(enabled && gradientCheckbox.isSelected());
         applyCurrentStyle();
     }
 
     public void setGradientEnabled(boolean enabled) {
         gradientCheckbox.setSelected(enabled);
-        fillSecondaryButton.setEnabled(fillEnabledCheckbox.isSelected() && enabled);
-        applyCurrentStyle();
-    }
-
-    public void setStrokeWidth(float width) {
-        strokeWidthSpinner.setValue((double) width);
-        applyCurrentStyle();
-    }
-
-    public void setLineStyle(LineStyle lineStyle) {
-        lineStyleComboBox.setSelectedItem(lineStyle);
+        fillSecondarySwatch.setEnabled(fillEnabledCheckbox.isSelected() && enabled);
         applyCurrentStyle();
     }
 
     public void setFillColor(Color color) {
-        fillColorButton.setBackground(color);
+        fillColorSwatch.setColor(color);
         applyCurrentStyle();
     }
 
     public void setGradientEndColor(Color color) {
-        fillSecondaryButton.setBackground(color);
+        fillSecondarySwatch.setColor(color);
         applyCurrentStyle();
     }
 
     public void setStrokeColor(Color color) {
-        strokeColorButton.setBackground(color);
+        strokeColorSwatch.setColor(color);
         applyCurrentStyle();
     }
 
     private void setupListeners() {
         fillEnabledCheckbox.addActionListener(e -> {
             if (isUpdating) return;
-            fillColorButton.setEnabled(fillEnabledCheckbox.isSelected());
+            fillColorSwatch.setEnabled(fillEnabledCheckbox.isSelected());
             gradientCheckbox.setEnabled(fillEnabledCheckbox.isSelected());
-            fillSecondaryButton.setEnabled(fillEnabledCheckbox.isSelected() && gradientCheckbox.isSelected());
+            fillSecondarySwatch.setEnabled(fillEnabledCheckbox.isSelected() && gradientCheckbox.isSelected());
             applyCurrentStyle();
         });
 
         gradientCheckbox.addActionListener(e -> {
             if (isUpdating) return;
-            fillSecondaryButton.setEnabled(fillEnabledCheckbox.isSelected() && gradientCheckbox.isSelected());
+            fillSecondarySwatch.setEnabled(fillEnabledCheckbox.isSelected() && gradientCheckbox.isSelected());
             applyCurrentStyle();
         });
 
-        fillColorButton.addActionListener(e -> chooseFillColor());
-        fillSecondaryButton.addActionListener(e -> chooseFillSecondaryColor());
-        strokeColorButton.addActionListener(e -> chooseStrokeColor());
+        fillColorSwatch.addClickListener(() -> chooseFillColor());
+        fillSecondarySwatch.addClickListener(() -> chooseFillSecondaryColor());
+        strokeColorSwatch.addClickListener(() -> chooseStrokeColor());
 
         strokeWidthSpinner.addChangeListener(e -> {
             if (isUpdating) return;
@@ -246,10 +246,10 @@ public class StylePanel extends JPanel {
         List<ShapeObject> selected = shapeManager.getSelectedShapes();
         if (selected.isEmpty()) {
             drawingPanel.setCurrentFillEnabled(fillEnabledCheckbox.isSelected());
-            drawingPanel.setCurrentFillColor(fillColorButton.getBackground());
-            drawingPanel.setCurrentFillSecondaryColor(fillSecondaryButton.getBackground());
+            drawingPanel.setCurrentFillColor(fillColorSwatch.getColor());
+            drawingPanel.setCurrentFillSecondaryColor(fillSecondarySwatch.getColor());
             drawingPanel.setCurrentGradientFill(gradientCheckbox.isSelected());
-            drawingPanel.setCurrentStrokeColor(strokeColorButton.getBackground());
+            drawingPanel.setCurrentStrokeColor(strokeColorSwatch.getColor());
             drawingPanel.setCurrentStrokeWidth(((Number) strokeWidthSpinner.getValue()).floatValue());
             drawingPanel.setCurrentLineStyle((LineStyle) lineStyleComboBox.getSelectedItem());
         } else {
@@ -270,10 +270,10 @@ public class StylePanel extends JPanel {
         }
 
         shape.setFillEnabled(fillEnabledCheckbox.isSelected());
-        shape.setFillColor(fillColorButton.getBackground());
-        shape.setFillSecondaryColor(fillSecondaryButton.getBackground());
+        shape.setFillColor(fillColorSwatch.getColor());
+        shape.setFillSecondaryColor(fillSecondarySwatch.getColor());
         shape.setGradientFill(gradientCheckbox.isSelected());
-        shape.setStrokeColor(strokeColorButton.getBackground());
+        shape.setStrokeColor(strokeColorSwatch.getColor());
         shape.setStrokeWidth(((Number) strokeWidthSpinner.getValue()).floatValue());
         shape.setLineStyle((LineStyle) lineStyleComboBox.getSelectedItem());
     }
@@ -288,15 +288,132 @@ public class StylePanel extends JPanel {
         return shape;
     }
 
-    private JButton createColorButton() {
-        JButton button = new JButton();
-        button.setPreferredSize(new Dimension(40, 26));
-        button.setOpaque(true);
-        button.setBorderPainted(true);
-        button.setFocusPainted(false);
-        button.setText("");
-        button.setBorder(BorderFactory.createLineBorder(BORDER));
-        return button;
+    public void setStrokeWidth(float width) {
+        strokeWidthSpinner.setValue((double) width);
+        applyCurrentStyle();
+    }
+
+    public void setLineStyle(LineStyle lineStyle) {
+        lineStyleComboBox.setSelectedItem(lineStyle);
+        applyCurrentStyle();
+    }
+
+    // -------------------------------------------------------------------------
+    // ColorSwatch — blok warna interaktif dengan label hex
+    // -------------------------------------------------------------------------
+
+    /**
+     * Widget yang menampilkan kotak warna berwarna + teks hex di sebelahnya.
+     * Klik pada widget akan membuka JColorChooser via clickListener.
+     * Proxy JButton disediakan agar kode lama yang memanggil .getBackground()
+     * tetap dapat bekerja.
+     */
+    public class ColorSwatch extends JPanel {
+        private Color color;
+        private final JLabel hexLabel;
+        private final JButton proxyButton;
+        private Runnable clickListener;
+
+        public ColorSwatch(Color initialColor) {
+            setLayout(new BorderLayout(6, 0));
+            setOpaque(false);
+            this.color = initialColor != null ? initialColor : Color.BLACK;
+
+            // Kotak warna
+            JPanel box = new JPanel() {
+                @Override protected void paintComponent(Graphics g) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    if (isEnabled()) {
+                        g2.setColor(color);
+                        g2.fillRoundRect(0, 0, getWidth(), getHeight(), 5, 5);
+                    } else {
+                        // Pola kotak-kotak (disabled / no-fill)
+                        g2.setColor(new Color(50, 54, 59));
+                        g2.fillRoundRect(0, 0, getWidth(), getHeight(), 5, 5);
+                        g2.setColor(new Color(70, 76, 83));
+                        int s = 4;
+                        for (int r = 0; r < getHeight(); r += s) {
+                            for (int c2 = 0; c2 < getWidth(); c2 += s) {
+                                if ((r / s + c2 / s) % 2 == 0) g2.fillRect(c2, r, s, s);
+                            }
+                        }
+                        g2.setColor(new Color(80, 87, 95));
+                        g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 5, 5);
+                    }
+                    if (isEnabled()) {
+                        g2.setColor(BORDER);
+                        g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 5, 5);
+                    }
+                    g2.dispose();
+                }
+            };
+            box.setOpaque(false);
+            box.setPreferredSize(new Dimension(28, 22));
+            box.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            box.addMouseListener(new MouseAdapter() {
+                @Override public void mouseClicked(MouseEvent e) {
+                    if (isEnabled() && clickListener != null) clickListener.run();
+                }
+            });
+
+            hexLabel = new JLabel(toHex(color));
+            hexLabel.setForeground(new Color(178, 184, 191));
+            hexLabel.setFont(hexLabel.getFont().deriveFont(Font.PLAIN, 11f));
+            hexLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            hexLabel.addMouseListener(new MouseAdapter() {
+                @Override public void mouseClicked(MouseEvent e) {
+                    if (isEnabled() && clickListener != null) clickListener.run();
+                }
+            });
+
+            add(box, BorderLayout.WEST);
+            add(hexLabel, BorderLayout.CENTER);
+
+            proxyButton = new JButton();
+            proxyButton.setBackground(this.color);
+        }
+
+        public void setColor(Color c) {
+            if (c == null) return;
+            this.color = c;
+            hexLabel.setText(toHex(c));
+            proxyButton.setBackground(c);
+            repaint();
+        }
+
+        public Color getColor() { return color; }
+
+        public JButton getProxyButton() { return proxyButton; }
+
+        public void addClickListener(Runnable r) { this.clickListener = r; }
+
+        @Override public void setEnabled(boolean enabled) {
+            super.setEnabled(enabled);
+            hexLabel.setForeground(enabled ? new Color(178, 184, 191) : new Color(80, 87, 95));
+            repaint();
+        }
+
+        private String toHex(Color c) {
+            return String.format("#%02X%02X%02X", c.getRed(), c.getGreen(), c.getBlue());
+        }
+    }
+
+    private void addSwatchRow(JPanel panel, int row, String label, ColorSwatch swatch) {
+        GridBagConstraints labelGbc = new GridBagConstraints();
+        labelGbc.gridx = 0;
+        labelGbc.gridy = row;
+        labelGbc.anchor = GridBagConstraints.WEST;
+        labelGbc.insets = new Insets(4, 0, 4, 12);
+        panel.add(createFieldLabel(label), labelGbc);
+
+        GridBagConstraints swatchGbc = new GridBagConstraints();
+        swatchGbc.gridx = 1;
+        swatchGbc.gridy = row;
+        swatchGbc.weightx = 1.0;
+        swatchGbc.fill = GridBagConstraints.HORIZONTAL;
+        swatchGbc.insets = new Insets(4, 0, 4, 0);
+        panel.add(swatch, swatchGbc);
     }
 
     private void addSectionLabel(JPanel panel, int row, String text) {

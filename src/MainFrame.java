@@ -4,6 +4,7 @@ import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.BasicStroke;
 import java.awt.Font;
@@ -27,7 +28,7 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JTabbedPane;
+import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
 import javax.swing.UIManager;
 import javax.swing.Box;
@@ -453,12 +454,11 @@ public class MainFrame extends JFrame {
     // Toolbar
     // =========================================================================
 
-    private JPanel createToolBar() {
+    private javax.swing.JScrollPane createToolBar() {
         JPanel toolBar = new JPanel();
         toolBar.setLayout(new BoxLayout(toolBar, BoxLayout.Y_AXIS));
         toolBar.setBackground(TOOL_BG);
         toolBar.setBorder(BorderFactory.createEmptyBorder(10, 6, 10, 6));
-        toolBar.setPreferredSize(new Dimension(74, 0));
 
         ButtonGroup toolGroup = new ButtonGroup();
         addToolButton(toolBar, toolGroup, ToolType.SELECT, true);
@@ -469,21 +469,118 @@ public class MainFrame extends JFrame {
         addToolButton(toolBar, toolGroup, ToolType.STAR, false);
         addToolButton(toolBar, toolGroup, ToolType.LINE, false);
 
-        return toolBar;
+        javax.swing.JScrollPane sp = new javax.swing.JScrollPane(toolBar);
+        sp.setBorder(null);
+        sp.setBackground(TOOL_BG);
+        sp.getViewport().setBackground(TOOL_BG);
+        sp.setHorizontalScrollBarPolicy(javax.swing.JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        sp.setVerticalScrollBarPolicy(javax.swing.JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        sp.getVerticalScrollBar().setUnitIncrement(12);
+        sp.setPreferredSize(new Dimension(74, 0));
+
+        javax.swing.JScrollBar vsb = sp.getVerticalScrollBar();
+        vsb.setPreferredSize(new Dimension(0, 0)); // sembunyikan scrollbar tapi tetap bisa scroll
+        vsb.setUI(new javax.swing.plaf.basic.BasicScrollBarUI() {
+            private final Color TRACK = TOOL_BG;
+            private final Color THUMB = new Color(70, 76, 83);
+            private final Color THUMB_HOVER = new Color(95, 102, 110);
+
+            @Override protected void configureScrollBarColors() {
+                thumbColor = THUMB;
+                trackColor = TRACK;
+            }
+            @Override protected JButton createDecreaseButton(int orientation) { return zeroBtn(); }
+            @Override protected JButton createIncreaseButton(int orientation) { return zeroBtn(); }
+            private JButton zeroBtn() {
+                JButton b = new JButton();
+                b.setPreferredSize(new Dimension(0, 0));
+                b.setMinimumSize(new Dimension(0, 0));
+                b.setMaximumSize(new Dimension(0, 0));
+                return b;
+            }
+            @Override public void paintTrack(Graphics g, javax.swing.JComponent c, Rectangle trackBounds) {
+                g.setColor(TRACK);
+                g.fillRect(trackBounds.x, trackBounds.y, trackBounds.width, trackBounds.height);
+            }
+            @Override public void paintThumb(Graphics g, javax.swing.JComponent c, Rectangle thumbBounds) {
+                if (thumbBounds.isEmpty()) return;
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(isDragging ? THUMB_HOVER : THUMB);
+                g2.fillRoundRect(thumbBounds.x + 1, thumbBounds.y + 2,
+                        thumbBounds.width - 2, thumbBounds.height - 4, 6, 6);
+                g2.dispose();
+            }
+        });
+
+        return sp;
     }
 
     private JPanel createRightPanel() {
-        JTabbedPane tabs = new JTabbedPane();
-        tabs.setBackground(PANEL_BG);
-        tabs.setForeground(TEXT);
-        tabs.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, new Color(21, 24, 27)));
-        tabs.addTab("PropertyPanel", propertyPanel);
-        tabs.addTab("Style", stylePanel);
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBackground(PANEL_BG);
+
+        propertyPanel.setAlignmentX(LEFT_ALIGNMENT);
+        stylePanel.setAlignmentX(LEFT_ALIGNMENT);
+        content.add(propertyPanel);
+        content.add(stylePanel);
+
+        JScrollPane scrollPane = new JScrollPane(content);
+        scrollPane.setBorder(null);
+        scrollPane.setBackground(PANEL_BG);
+        scrollPane.getViewport().setBackground(PANEL_BG);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(12);
+
+        // Dark scrollbar styling
+        javax.swing.JScrollBar vsb = scrollPane.getVerticalScrollBar();
+        vsb.setBackground(new Color(22, 24, 27));
+        vsb.setForeground(new Color(22, 24, 27));
+        vsb.setUI(new javax.swing.plaf.basic.BasicScrollBarUI() {
+            private final Color TRACK = new Color(22, 24, 27);
+            private final Color THUMB = new Color(70, 76, 83);
+            private final Color THUMB_HOVER = new Color(95, 102, 110);
+
+            @Override protected void configureScrollBarColors() {
+                thumbColor = THUMB;
+                trackColor = TRACK;
+            }
+            @Override protected JButton createDecreaseButton(int orientation) {
+                return createZeroButton();
+            }
+            @Override protected JButton createIncreaseButton(int orientation) {
+                return createZeroButton();
+            }
+            private JButton createZeroButton() {
+                JButton b = new JButton();
+                b.setPreferredSize(new Dimension(0, 0));
+                b.setMinimumSize(new Dimension(0, 0));
+                b.setMaximumSize(new Dimension(0, 0));
+                return b;
+            }
+            @Override public void paintTrack(Graphics g, javax.swing.JComponent c, Rectangle trackBounds) {
+                g.setColor(TRACK);
+                g.fillRect(trackBounds.x, trackBounds.y, trackBounds.width, trackBounds.height);
+            }
+            @Override public void paintThumb(Graphics g, javax.swing.JComponent c, Rectangle thumbBounds) {
+                if (thumbBounds.isEmpty()) return;
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(isDragging ? THUMB_HOVER : THUMB);
+                g2.fillRoundRect(thumbBounds.x + 2, thumbBounds.y + 2,
+                        thumbBounds.width - 4, thumbBounds.height - 4, 6, 6);
+                g2.dispose();
+            }
+        });
 
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setPreferredSize(new Dimension(250, 0));
+        panel.setPreferredSize(new Dimension(260, 100));
+        panel.setMinimumSize(new Dimension(260, 100));
         panel.setBackground(PANEL_BG);
-        panel.add(tabs, BorderLayout.CENTER);
+        panel.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, new Color(21, 24, 27)));
+        panel.add(scrollPane, BorderLayout.CENTER);
         return panel;
     }
 

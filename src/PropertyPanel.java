@@ -2,7 +2,6 @@ import javax.swing.BorderFactory;
 import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.event.ChangeListener;
@@ -49,7 +48,7 @@ public class PropertyPanel extends JPanel {
         setLayout(new BorderLayout());
         setBackground(PANEL_BG);
         setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        setPreferredSize(new Dimension(250, 0));
+        setMaximumSize(new Dimension(250, Integer.MAX_VALUE));
 
         JLabel titleLabel = new JLabel("Transform");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
@@ -62,10 +61,7 @@ public class PropertyPanel extends JPanel {
         JPanel contentPanel = new JPanel(new GridBagLayout());
         contentPanel.setBackground(PANEL_BG);
         contentPanel.setBorder(BorderFactory.createEmptyBorder(8, 12, 12, 12));
-        JScrollPane scrollPane = new JScrollPane(contentPanel);
-        scrollPane.setBorder(null);
-        scrollPane.getViewport().setBackground(PANEL_BG);
-        add(scrollPane, BorderLayout.CENTER);
+        add(contentPanel, BorderLayout.CENTER);
 
         typeValue = new JLabel("-");
         widthValue = new JLabel("-");
@@ -188,7 +184,7 @@ public class PropertyPanel extends JPanel {
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 0, 4, 0);
-        JLabel label = new JLabel(text);
+        JLabel label = new JLabel(cleanLabel(text));
         label.setForeground(TEXT);
         label.setFont(label.getFont().deriveFont(Font.BOLD, 13f));
         label.setOpaque(true);
@@ -250,9 +246,17 @@ public class PropertyPanel extends JPanel {
     }
 
     private JLabel createFieldLabel(String text) {
-        JLabel label = new JLabel(text);
+        JLabel label = new JLabel(cleanLabel(text));
         label.setForeground(MUTED_TEXT);
         return label;
+    }
+
+    private String cleanLabel(String text) {
+        return text
+                .replace("â”€", "")
+                .replace("─", "")
+                .replace("Â°", "")
+                .trim();
     }
 
     private void styleValueLabel(JLabel label) {
