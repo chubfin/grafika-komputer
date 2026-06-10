@@ -63,6 +63,10 @@ public class DrawingPanel extends JPanel {
     /** true saat kita sedang menggambar rubber-band selection */
     private boolean rubberBanding = false;
 
+    // Animasi
+    private javax.swing.Timer animationTimer;
+    private boolean animating = false;
+
     public DrawingPanel(ShapeManager shapeManager, Consumer<ShapeObject> selectionListener) {
         this.shapeManager = shapeManager;
         this.selectionListener = selectionListener;
@@ -730,5 +734,97 @@ public class DrawingPanel extends JPanel {
         }
         return new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
                 10.0f, dash, 0.0f);
+    }
+
+    public void startAnimation() {
+        if (animating) return;
+        animating = true;
+        if (animationTimer == null) {
+            animationTimer = new javax.swing.Timer(30, e -> updateAnimation());
+        }
+        animationTimer.start();
+    }
+
+    public void stopAnimation() {
+        if (!animating) return;
+        animating = false;
+        if (animationTimer != null) {
+            animationTimer.stop();
+        }
+    }
+
+    public boolean isAnimating() {
+        return animating;
+    }
+
+    private void updateAnimation() {
+        Rectangle cb = getCanvasBounds();
+        for (ShapeObject shape : shapeManager.getShapes()) {
+            updateSingleShapeAnimation(shape, cb);
+        }
+        repaint();
+    }
+
+    private void updateSingleShapeAnimation(ShapeObject shape, Rectangle cb) {
+        if (shape instanceof GroupObject) {
+            GroupObject group = (GroupObject) shape;
+            if (group.getAnimationType() == AnimationType.BOUNCE) {
+                // Gerakkan grup secara keseluruhan
+                group.moveBy((int) group.getAnimSpeedX(), (int) group.getAnimSpeedY());
+                Rectangle bounds = group.getTransformedShape().getBounds();
+                if (bounds.x <= cb.x) {
+                    group.moveBy(cb.x - bounds.x, 0);
+                    group.setAnimSpeedX(-group.getAnimSpeedX());
+                } else if (bounds.x + bounds.width >= cb.x + cb.width) {
+                    group.moveBy((cb.x + cb.width - bounds.width) - bounds.x, 0);
+                    group.setAnimSpeedX(-group.getAnimSpeedX());
+                }
+                if (bounds.y <= cb.y) {
+                    group.moveBy(0, cb.y - bounds.y);
+                    group.setAnimSpeedY(-group.getAnimSpeedY());
+                } else if (bounds.y + bounds.height >= cb.y + cb.height) {
+                    group.moveBy(0, (cb.y + cb.height - bounds.height) - bounds.y);
+                    group.setAnimSpeedY(-group.getAnimSpeedY());
+                }
+            } else {
+                // Untuk tipe animasi lainnya, animasikan member individu
+                for (ShapeObject member : group.getMembers()) {
+                    updateSingleShapeAnimation(member, cb);
+                }
+            }
+        } else {
+            switch (shape.getAnimationType()) {
+                case SPIN:
+                    shape.setRotation((shape.getRotation() + 2.0) % 360);
+                    break;
+                case BOUNCE:
+                    shape.moveBy((int) shape.getAnimSpeedX(), (int) shape.getAnimSpeedY());
+                    Rectangle bounds = shape.getTransformedShape().getBounds();
+                    if (bounds.x <= cb.x) {
+                        shape.setX(cb.x);
+                        shape.setAnimSpeedX(-shape.getAnimSpeedX());
+                    } else if (bounds.x + bounds.width >= cb.x + cb.width) {
+                        shape.setX(cb.x + cb.width - bounds.width);
+                        shape.setAnimSpeedX(-shape.getAnimSpeedX());
+                    }
+                    if (bounds.y <= cb.y) {
+                        shape.setY(cb.y);
+                        shape.setAnimSpeedY(-shape.getAnimSpeedY());
+                    } else if (bounds.y + bounds.height >= cb.y + cb.height) {
+                        shape.setY(cb.y + cb.height - bounds.height);
+                        shape.setAnimSpeedY(-shape.getAnimSpeedY());
+                    }
+                    break;
+                case PULSE:
+                    shape.setPulsePhase(shape.getPulsePhase() + 0.1);
+                    double scale = 1.0 + 0.25 * Math.sin(shape.getPulsePhase());
+                    shape.setScaleX(scale);
+                    shape.setScaleY(scale);
+                    break;
+                case NONE:
+                default:
+                    break;
+            }
+        }
     }
 }

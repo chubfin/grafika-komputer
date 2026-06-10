@@ -50,6 +50,7 @@ public class MainFrame extends JFrame {
     private final PropertyPanel propertyPanel;
     private final StylePanel stylePanel;
     private final JLabel statusLabel;
+    private JButton animStatusButton;
 
     public MainFrame() {
         installDarkTheme();
@@ -96,6 +97,7 @@ public class MainFrame extends JFrame {
         menuBar.add(createEditMenu());
         menuBar.add(createTransformMenu());
         menuBar.add(createStyleMenu());
+        menuBar.add(createAnimationMenu());
         return menuBar;
     }
 
@@ -641,7 +643,7 @@ public class MainFrame extends JFrame {
         statusBar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(24, 27, 30)));
         statusBar.add(statusLabel, BorderLayout.WEST);
 
-        JPanel actions = new JPanel(new GridLayout(1, 3, 8, 0));
+        JPanel actions = new JPanel(new GridLayout(1, 4, 8, 0));
         actions.setOpaque(false);
         actions.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 10));
         actions.add(createStatusButton("Undo", "undo", () -> {
@@ -671,6 +673,14 @@ public class MainFrame extends JFrame {
             onSelectionChanged(null);
             statusLabel.setText("Kanvas dibersihkan");
         }));
+
+        final JButton[] animBtnHolder = new JButton[1];
+        animBtnHolder[0] = createStatusButton("Play", "play", () -> {
+            toggleAnimationState(animBtnHolder[0]);
+        });
+        animStatusButton = animBtnHolder[0];
+        actions.add(animStatusButton);
+
         statusBar.add(actions, BorderLayout.EAST);
         return statusBar;
     }
@@ -773,17 +783,18 @@ public class MainFrame extends JFrame {
                 int textGap = 6;
                 FontMetrics fm = g2.getFontMetrics(getFont());
                 int textW = fm.stringWidth(getText());
-                int totalW = (iconType != null ? iconSize + textGap : 0) + textW;
+                String currentIcon = (String) getClientProperty("iconType");
+                int totalW = (currentIcon != null ? iconSize + textGap : 0) + textW;
                 int startX = (getWidth() - totalW) / 2;
                 int cy = getHeight() / 2;
 
                 // Icon
-                if (iconType != null) {
+                if (currentIcon != null) {
                     g2.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                     g2.setColor(isEnabled() ? TEXT : new Color(100, 106, 113));
                     int ix = startX;
                     int iy = cy - iconSize / 2;
-                    paintStatusIcon(g2, iconType, ix, iy, iconSize);
+                    paintStatusIcon(g2, currentIcon, ix, iy, iconSize);
                     startX += iconSize + textGap;
                 }
 
@@ -794,6 +805,7 @@ public class MainFrame extends JFrame {
                 g2.dispose();
             }
         };
+        button.putClientProperty("iconType", iconType);
         button.setText(text);
         button.setFocusPainted(false);
         button.setContentAreaFilled(false);
@@ -804,7 +816,11 @@ public class MainFrame extends JFrame {
         button.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(BORDER),
                 BorderFactory.createEmptyBorder(5, 12, 5, 12)));
-        button.addActionListener(e -> action.run());
+        button.addActionListener(e -> {
+            if (action != null) {
+                action.run();
+            }
+        });
         return button;
     }
 
@@ -858,6 +874,22 @@ public class MainFrame extends JFrame {
                 g2.drawLine(tx + 3, y + 6, tx + 3, y + size - 4);
                 g2.drawLine(tx + tw / 2, y + 6, tx + tw / 2, y + size - 4);
                 g2.drawLine(tx + tw - 3, y + 6, tx + tw - 3, y + size - 4);
+                break;
+            }
+            case "play": {
+                g2.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                double s = size / 16.0;
+                Polygon p = new Polygon();
+                p.addPoint((int)(x + 4*s), (int)(y + 2*s));
+                p.addPoint((int)(x + 13*s), (int)(y + 8*s));
+                p.addPoint((int)(x + 4*s), (int)(y + 14*s));
+                g2.drawPolygon(p);
+                break;
+            }
+            case "stop": {
+                g2.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                double s = size / 16.0;
+                g2.drawRect((int)(x + 3*s), (int)(y + 3*s), (int)(10*s), (int)(10*s));
                 break;
             }
         }
@@ -959,5 +991,79 @@ public class MainFrame extends JFrame {
             g2.setColor(isSelected() ? TEXT : new Color(210, 216, 222));
             g2.drawString(label, x, y);
         }
+    }
+
+    private void toggleAnimationState(JButton btn) {
+        if (drawingPanel.isAnimating()) {
+            drawingPanel.stopAnimation();
+            btn.setText("Play");
+            btn.putClientProperty("iconType", "play");
+            statusLabel.setText("Animasi dihentikan");
+        } else {
+            drawingPanel.startAnimation();
+            btn.setText("Stop");
+            btn.putClientProperty("iconType", "stop");
+            statusLabel.setText("Animasi dijalankan...");
+        }
+        btn.repaint();
+    }
+
+    private JMenu createAnimationMenu() {
+        JMenu animMenu = new JMenu("Animasi");
+
+        JMenuItem playItem = new JMenuItem("Mulai/Hentikan Animasi");
+        playItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
+                java.awt.event.KeyEvent.VK_SPACE,
+                java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        playItem.addActionListener(e -> {
+            if (animStatusButton != null) {
+                toggleAnimationState(animStatusButton);
+            }
+        });
+
+        JMenu typeSubMenu = new JMenu("Atur Animasi Shape Terpilih");
+        
+        JMenuItem noneItem = new JMenuItem("None");
+        noneItem.addActionListener(e -> applyAnimationToSelected(AnimationType.NONE));
+        
+        JMenuItem spinItem = new JMenuItem("Spin (Rotate)");
+        spinItem.addActionListener(e -> applyAnimationToSelected(AnimationType.SPIN));
+        
+        JMenuItem bounceItem = new JMenuItem("Bounce (Move)");
+        bounceItem.addActionListener(e -> applyAnimationToSelected(AnimationType.BOUNCE));
+        
+        JMenuItem pulseItem = new JMenuItem("Pulse (Scale)");
+        pulseItem.addActionListener(e -> applyAnimationToSelected(AnimationType.PULSE));
+
+        typeSubMenu.add(noneItem);
+        typeSubMenu.add(spinItem);
+        typeSubMenu.add(bounceItem);
+        typeSubMenu.add(pulseItem);
+
+        animMenu.add(playItem);
+        animMenu.addSeparator();
+        animMenu.add(typeSubMenu);
+
+        return animMenu;
+    }
+
+    private void applyAnimationToSelected(AnimationType type) {
+        List<ShapeObject> selected = shapeManager.getSelectedShapes();
+        if (selected.isEmpty()) {
+            statusLabel.setText("Pilih shape terlebih dahulu");
+            return;
+        }
+        for (ShapeObject s : selected) {
+            if (s instanceof GroupObject) {
+                for (ShapeObject member : ((GroupObject) s).getMembers()) {
+                    member.setAnimationType(type);
+                }
+            } else {
+                s.setAnimationType(type);
+            }
+        }
+        drawingPanel.repaint();
+        onSelectionChanged(shapeManager.getSelectedShape());
+        statusLabel.setText("Animasi " + type.getDisplayName() + " diterapkan ke " + selected.size() + " shape");
     }
 }

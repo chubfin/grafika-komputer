@@ -1,5 +1,6 @@
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
@@ -38,11 +39,12 @@ public class PropertyPanel extends JPanel {
     private final JSpinner skewXSpinner;
     private final JSpinner skewYSpinner;
 
-    // Reflection: radio buttons (Horizontal / Vertical / None)
     private final JRadioButton reflectNoneRadio;
     private final JRadioButton reflectHorizontalRadio;
     private final JRadioButton reflectVerticalRadio;
     private final ButtonGroup reflectionGroup;
+
+    private final JComboBox<AnimationType> animTypeComboBox;
 
     private ShapeObject currentShape;
     private Runnable onChangeCallback;
@@ -95,6 +97,11 @@ public class PropertyPanel extends JPanel {
         reflectionGroup.add(reflectVerticalRadio);
         reflectNoneRadio.setSelected(true);
 
+        animTypeComboBox = new JComboBox<>(AnimationType.values());
+        animTypeComboBox.setBackground(FIELD_BG);
+        animTypeComboBox.setForeground(TEXT);
+        animTypeComboBox.setBorder(BorderFactory.createLineBorder(BORDER));
+
         styleRadioButton(reflectNoneRadio);
         styleRadioButton(reflectHorizontalRadio);
         styleRadioButton(reflectVerticalRadio);
@@ -139,6 +146,10 @@ public class PropertyPanel extends JPanel {
         // Reflection: label di atas, radio buttons di bawah
         addReflectionBlock(contentPanel, row++);
 
+        // ── Animasi ──
+        addSectionLabel(contentPanel, row++, "Animasi");
+        addAnimationBlock(contentPanel, row++);
+
         setupListeners();
     }
 
@@ -182,6 +193,12 @@ public class PropertyPanel extends JPanel {
     reflectNoneRadio.addActionListener(reflectionListener);
     reflectHorizontalRadio.addActionListener(reflectionListener);
     reflectVerticalRadio.addActionListener(reflectionListener);
+
+    animTypeComboBox.addActionListener(e -> {
+        if (isUpdating || currentShape == null) return;
+        currentShape.setAnimationType((AnimationType) animTypeComboBox.getSelectedItem());
+        onChangeCallback.run();
+    });
 }
 
 public void showShape(ShapeObject shape) {
@@ -189,10 +206,58 @@ public void showShape(ShapeObject shape) {
     currentShape = shape;
 
     if (shape == null) {
-        // ... reset values ...
+        xSpinner.setValue(0);
+        ySpinner.setValue(0);
+        rotationSpinner.setValue(0.0);
+        scaleXSpinner.setValue(1.0);
+        scaleYSpinner.setValue(1.0);
+        skewXSpinner.setValue(0.0);
+        skewYSpinner.setValue(0.0);
+        
+        typeValue.setText("-");
+        widthValue.setText("-");
+        heightValue.setText("-");
+        
         reflectNoneRadio.setSelected(true);
+        animTypeComboBox.setSelectedItem(AnimationType.NONE);
+        
+        xSpinner.setEnabled(false);
+        ySpinner.setEnabled(false);
+        rotationSpinner.setEnabled(false);
+        scaleXSpinner.setEnabled(false);
+        scaleYSpinner.setEnabled(false);
+        skewXSpinner.setEnabled(false);
+        skewYSpinner.setEnabled(false);
+        reflectNoneRadio.setEnabled(false);
+        reflectHorizontalRadio.setEnabled(false);
+        reflectVerticalRadio.setEnabled(false);
+        animTypeComboBox.setEnabled(false);
     } else {
-        // ... set other values ...
+        xSpinner.setValue(shape.getX());
+        ySpinner.setValue(shape.getY());
+        rotationSpinner.setValue(shape.getRotation());
+        scaleXSpinner.setValue(shape.getScaleX());
+        scaleYSpinner.setValue(shape.getScaleY());
+        skewXSpinner.setValue(shape.getSkewX());
+        skewYSpinner.setValue(shape.getSkewY());
+        
+        typeValue.setText(shape.getType().getDisplayName());
+        widthValue.setText(String.valueOf(shape.getWidth()));
+        heightValue.setText(String.valueOf(shape.getHeight()));
+        
+        animTypeComboBox.setSelectedItem(shape.getAnimationType());
+        
+        xSpinner.setEnabled(true);
+        ySpinner.setEnabled(true);
+        rotationSpinner.setEnabled(true);
+        scaleXSpinner.setEnabled(true);
+        scaleYSpinner.setEnabled(true);
+        skewXSpinner.setEnabled(true);
+        skewYSpinner.setEnabled(true);
+        reflectNoneRadio.setEnabled(true);
+        reflectHorizontalRadio.setEnabled(true);
+        reflectVerticalRadio.setEnabled(true);
+        animTypeComboBox.setEnabled(true);
         
         // Reflection handling
         if (!shape.isReflected()) {
@@ -489,5 +554,30 @@ public void showShape(ShapeObject shape) {
         radio.setOpaque(false);
         radio.setForeground(TEXT);
         radio.setFont(radio.getFont().deriveFont(12f));
+    }
+
+    private void addAnimationBlock(JPanel panel, int row) {
+        JPanel block = new JPanel(new GridBagLayout());
+        block.setOpaque(false);
+
+        // Label "Type"
+        GridBagConstraints lblGbc = new GridBagConstraints();
+        lblGbc.gridx = 0; lblGbc.gridy = 0;
+        lblGbc.anchor = GridBagConstraints.WEST;
+        lblGbc.insets = new Insets(0, 0, 4, 0);
+        block.add(createFieldLabel("Tipe Animasi"), lblGbc);
+
+        // Combo Box
+        GridBagConstraints cbGbc = new GridBagConstraints();
+        cbGbc.gridx = 0; cbGbc.gridy = 1;
+        cbGbc.weightx = 1.0; cbGbc.fill = GridBagConstraints.HORIZONTAL;
+        block.add(animTypeComboBox, cbGbc);
+
+        GridBagConstraints blockGbc = new GridBagConstraints();
+        blockGbc.gridx = 0; blockGbc.gridy = row;
+        blockGbc.gridwidth = 2;
+        blockGbc.fill = GridBagConstraints.HORIZONTAL;
+        blockGbc.insets = new Insets(4, 0, 4, 0);
+        panel.add(block, blockGbc);
     }
 }

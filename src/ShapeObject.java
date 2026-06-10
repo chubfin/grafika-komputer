@@ -35,6 +35,12 @@ public class ShapeObject {
     private int reflectDirection;  // 0=none, 1=horizontal (Kiri/Kanan), 2=vertical (Atas/Bawah)
     private LineStyle originalLineStyle;
     
+    // Animasi
+    private AnimationType animationType;
+    private double animSpeedX;
+    private double animSpeedY;
+    private double pulsePhase;
+    
     // Batas canvas (di-set dari DrawingPanel)
     private static Rectangle canvasBounds;
 
@@ -94,6 +100,10 @@ public class ShapeObject {
         this.reflected = false;
         this.reflectDirection = 0;
         this.originalLineStyle = this.lineStyle;
+        this.animationType = AnimationType.NONE;
+        this.animSpeedX = 3.0;
+        this.animSpeedY = 3.0;
+        this.pulsePhase = 0.0;
     }
     
     public static void setCanvasBounds(Rectangle bounds) {
@@ -344,5 +354,37 @@ public class ShapeObject {
             this.lineStyle = this.originalLineStyle;
         }
         this.reflected = reflected;
+    }
+
+    public AnimationType getAnimationType() {
+        return animationType;
+    }
+
+    public void setAnimationType(AnimationType animationType) {
+        this.animationType = animationType != null ? animationType : AnimationType.NONE;
+    }
+
+    public double getAnimSpeedX() {
+        return animSpeedX;
+    }
+
+    public void setAnimSpeedX(double animSpeedX) {
+        this.animSpeedX = animSpeedX;
+    }
+
+    public double getAnimSpeedY() {
+        return animSpeedY;
+    }
+
+    public void setAnimSpeedY(double animSpeedY) {
+        this.animSpeedY = animSpeedY;
+    }
+
+    public double getPulsePhase() {
+        return pulsePhase;
+    }
+
+    public void setPulsePhase(double pulsePhase) {
+        this.pulsePhase = pulsePhase;
     }
 }
